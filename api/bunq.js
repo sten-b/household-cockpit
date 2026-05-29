@@ -148,10 +148,11 @@ export default async function handler(req, res) {
         if (status === 401) await kvDel(CTX_KEY);
         return res.status(status).json({ error: json?.Error?.[0]?.error_description || 'Failed', expired: status === 401 });
       }
+      console.log('Bunq full response keys:', JSON.stringify((json.Response || []).map(r => ({ type: Object.keys(r)[0], id: Object.values(r)[0]?.id, desc: Object.values(r)[0]?.description, status: Object.values(r)[0]?.status }))));
       const accounts = (json.Response || [])
-        .map(r => r.MonetaryAccountBank || r.MonetaryAccountSavings || r.MonetaryAccount)
+        .map(r => r.MonetaryAccountBank || r.MonetaryAccountSavings || r.MonetaryAccountJoint || r.MonetaryAccountLight || r.MonetaryAccountInvestment || r.MonetaryAccountExternalSavings || r.MonetaryAccount || Object.values(r)[0])
         .filter(Boolean)
-        .filter(a => a.status === 'ACTIVE')
+        // .filter(a => a.status === 'ACTIVE') // temporarily disabled to debug
         .map(a => ({
           id: a.id, description: a.description, balance: a.balance,
           currency: a.currency, status: a.status,

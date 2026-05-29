@@ -116,7 +116,7 @@ async function loadBunq() {
     }
 
     state.bunqPayments = [];
-    for (const acc of accounts.slice(0, 3)) {
+    for (const acc of accounts) {
       try {
         const { payments } = await bunqProxy('payments', { accountId: acc.id });
         state.bunqPayments.push(...payments);
