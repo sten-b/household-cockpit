@@ -131,3 +131,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 .save-btn:active { background: var(--md); }
 .save-btn i { font-size: 17px; }
 .hint { font-size: 11px; color: var(--t3); text-align: center; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+
+/* ── Account list in settings ── */
+.account-list { display: flex; flex-direction: column; gap: 0; margin-bottom: 16px; }
+.account-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid var(--bd); }
+.account-row:last-child { border-bottom: none; }
+.account-name { font-size: 12px; color: var(--t1); display: flex; align-items: center; gap: 6px; }
+.account-name i { font-size: 14px; color: var(--t3); }
+.account-tab { font-size: 11px; color: var(--m1); font-weight: 500; }
