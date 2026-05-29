@@ -154,6 +154,23 @@
     <button class="nav-item" data-page="investments"><i class="ti ti-chart-line" aria-hidden="true"></i><span>Investments</span></button>
   </nav>
 
+  <!-- Date picker sheet -->
+  <div class="settings-overlay" id="dateOverlay">
+    <div class="settings-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title"><i class="ti ti-calendar-event" aria-hidden="true"></i>Custom date range</div>
+      <div class="field">
+        <label><i class="ti ti-calendar" aria-hidden="true"></i>From</label>
+        <input type="date" id="drFrom">
+      </div>
+      <div class="field">
+        <label><i class="ti ti-calendar" aria-hidden="true"></i>To</label>
+        <input type="date" id="drTo">
+      </div>
+      <button class="save-btn" id="drApplyBtn"><i class="ti ti-check" aria-hidden="true"></i>Apply range</button>
+    </div>
+  </div>
+
   <!-- Settings sheet -->
   <div class="settings-overlay" id="settingsOverlay">
     <div class="settings-sheet">
