@@ -15,7 +15,7 @@ const state = {
   goals: store.get('goals') || [],
   holidays: store.get('holidays') || [],
   charts: {},
-  mapping: store.get('mapping') || { flii: 'Flii Media', holding: 'SB Holding', savings: '' },
+  // Account routing is hardcoded by ID in ACCOUNT_MAP
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -26,21 +26,31 @@ const fmtDate = d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', m
 const gc = 'rgba(0,0,0,0.05)', tc = '#a0a0a0';
 const COLORS = ['#e7255a', '#f05a84', '#f78faa', '#fbc4d4', '#ccc9c1', '#a8a8a0'];
 
-// ── Account lookup ────────────────────────────────────────────────────────────
+// ── Account routing (by ID — reliable regardless of name changes) ─────────────
+const ACCOUNT_MAP = {
+  flii:     [3408701],          // Flii Media
+  holding:  [3408705],          // SB Holding
+  budget:   [4172851, 2560176], // Rekeningen + Vast Samen
+  savings:  [16714864],         // Bruiloft
+};
+
+function accountsByIds(ids) {
+  return state.accounts.filter(a => ids.includes(a.id));
+}
+
+// Keep name-based fallbacks for settings override
 function accountsByName(...names) {
-  const lower = names.map(n => n.toLowerCase().trim());
+  const lower = names.map(n => n.toLowerCase().trim()).filter(Boolean);
+  if (!lower.length) return [];
   return state.accounts.filter(a => lower.some(n => a.description?.toLowerCase().includes(n)));
 }
 
 function personalAccounts() {
-  const biz = [state.mapping.flii, state.mapping.holding].map(n => n.toLowerCase().trim()).filter(Boolean);
-  return state.accounts.filter(a => !biz.some(n => a.description?.toLowerCase().includes(n)));
+  return accountsByIds([...ACCOUNT_MAP.budget, ...ACCOUNT_MAP.savings]);
 }
 
 function savingsAccounts() {
-  const names = state.mapping.savings.split(',').map(n => n.toLowerCase().trim()).filter(Boolean);
-  if (!names.length) return [];
-  return state.accounts.filter(a => names.some(n => a.description?.toLowerCase().includes(n)));
+  return accountsByIds(ACCOUNT_MAP.savings);
 }
 
 function paymentsFor(accounts) {
@@ -109,23 +119,9 @@ function renderActivePage(page) {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 const overlay = document.getElementById('settingsOverlay');
-document.getElementById('settingsBtn').addEventListener('click', () => {
-  document.getElementById('settingFlii').value    = state.mapping.flii;
-  document.getElementById('settingHolding').value = state.mapping.holding;
-  document.getElementById('settingSavings').value = state.mapping.savings;
-  overlay.classList.add('open');
-});
+document.getElementById('settingsBtn').addEventListener('click', () => overlay.classList.add('open'));
 overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
-document.getElementById('saveSettingsBtn').addEventListener('click', () => {
-  state.mapping = {
-    flii:    document.getElementById('settingFlii').value.trim(),
-    holding: document.getElementById('settingHolding').value.trim(),
-    savings: document.getElementById('settingSavings').value.trim(),
-  };
-  store.set('mapping', state.mapping);
-  overlay.classList.remove('open');
-  renderAllPages();
-});
+document.getElementById('saveSettingsBtn').addEventListener('click', () => overlay.classList.remove('open'));
 
 // ── Refresh ───────────────────────────────────────────────────────────────────
 document.getElementById('refreshBtn').addEventListener('click', async () => {
@@ -253,8 +249,8 @@ function hBarChart(canvasId, key, labels, data, colors) {
 
 // ── BUSINESS tab renderer ─────────────────────────────────────────────────────
 function renderBusiness(which) {
-  const name     = which === 'flii' ? state.mapping.flii : state.mapping.holding;
-  const accs     = accountsByName(name);
+  const ids  = which === 'flii' ? ACCOUNT_MAP.flii : ACCOUNT_MAP.holding;
+  const accs = accountsByIds(ids);
   const payments = paymentsFor(accs);
   const months   = getLast6Months();
   const totals   = monthlyTotals(payments, months);
