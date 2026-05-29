@@ -1,15 +1,13 @@
 'use strict';
 
-// ── Storage helpers ──────────────────────────────────────────────────────────
+// ── Storage helpers ───────────────────────────────────────────────────────────
 const store = {
   get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
   set: (k, v) => localStorage.setItem(k, JSON.stringify(v)),
-  del: k => localStorage.removeItem(k)
 };
 
-// ── State ────────────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
 const state = {
-  // API keys are stored server-side as Vercel env vars
   goals: store.get('goals') || defaultGoals(),
   holidays: store.get('holidays') || defaultHolidays(),
   bunqAccounts: [],
@@ -17,62 +15,70 @@ const state = {
   alpacaPositions: [],
   alpacaAccount: null,
   charts: {},
-  txOffset: 0
 };
 
 function defaultGoals() {
   return [
-    { id: 1, name: 'Emergency fund', icon: 'ti-shield-check', target: 10000, saved: 8000, color: '#f78faa' },
-    { id: 2, name: 'New car fund', icon: 'ti-car', target: 12000, saved: 5200, color: '#f05a84' },
-    { id: 3, name: 'Home office', icon: 'ti-device-laptop', target: 1500, saved: 390, color: '#fbc4d4' }
+    { id: 1, name: 'Emergency fund',  icon: 'ti-shield-check', target: 10000, saved: 8000, color: '#f78faa' },
+    { id: 2, name: 'New car fund',    icon: 'ti-car',          target: 12000, saved: 5200, color: '#f05a84' },
+    { id: 3, name: 'Home office',     icon: 'ti-device-laptop',target: 1500,  saved: 390,  color: '#fbc4d4' },
   ];
 }
-
 function defaultHolidays() {
   return [
-    { id: 1, name: 'Mallorca – Summer', icon: 'ti-plane', target: 3000, saved: 1840, color: '#e7255a', date: 'Sep 2026' }
+    { id: 1, name: 'Mallorca – Summer', icon: 'ti-plane', target: 3000, saved: 1840, color: '#e7255a', date: 'Sep 2026' },
   ];
 }
 
-// ── Navigation ───────────────────────────────────────────────────────────────
-const navItems = document.querySelectorAll('.nav-item');
-const pages = document.querySelectorAll('.page');
+// ── Format helpers ────────────────────────────────────────────────────────────
+const fmt = (n, d = 2) => '€' + Number(n).toLocaleString('nl-NL', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtSign = n => (n >= 0 ? '+' : '') + fmt(n);
+const fmtDate = d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
-navItems.forEach(btn => {
+// ── Connection status dots ────────────────────────────────────────────────────
+function setConn(service, status) {
+  // status: 'loading' | 'ok' | 'error'
+  const dot = document.getElementById(service + 'Dot');
+  const lbl = document.getElementById(service + 'Label');
+  if (!dot) return;
+  dot.className = 'dot' + (status === 'ok' ? '' : status === 'loading' ? ' amber' : ' red');
+  if (lbl) lbl.style.color = status === 'ok' ? 'var(--pos)' : status === 'error' ? 'var(--neg)' : '#c97d00';
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
-    const page = btn.dataset.page;
-    navItems.forEach(b => b.classList.remove('active'));
-    pages.forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('page-' + page).classList.add('active');
-    if (page === 'transactions') renderTransactions();
-    if (page === 'investments') renderInvestments();
+    document.getElementById('page-' + btn.dataset.page).classList.add('active');
+    if (btn.dataset.page === 'transactions') renderTransactions();
+    if (btn.dataset.page === 'investments')  renderInvestments();
   });
 });
 
-// ── Settings sheet ───────────────────────────────────────────────────────────
+// ── Settings sheet (budget only) ──────────────────────────────────────────────
 const overlay = document.getElementById('settingsOverlay');
 document.getElementById('settingsBtn').addEventListener('click', openSettings);
 overlay.addEventListener('click', e => { if (e.target === overlay) closeSettings(); });
 
 function openSettings() {
-  const budgets = store.get('budgets') || {};
-  document.getElementById('budgetHousing').value = budgets.Housing || 950;
-  document.getElementById('budgetGroceries').value = budgets.Groceries || 300;
-  document.getElementById('budgetDining').value = budgets.Dining || 200;
-  document.getElementById('budgetTransport').value = budgets.Transport || 150;
-  document.getElementById('budgetSubscriptions').value = budgets.Subscriptions || 150;
+  const b = store.get('budgets') || {};
+  document.getElementById('budgetHousing').value       = b.Housing       || 950;
+  document.getElementById('budgetGroceries').value     = b.Groceries     || 300;
+  document.getElementById('budgetDining').value        = b.Dining        || 200;
+  document.getElementById('budgetTransport').value     = b.Transport     || 150;
+  document.getElementById('budgetSubscriptions').value = b.Subscriptions || 150;
   overlay.classList.add('open');
 }
-
 function closeSettings() { overlay.classList.remove('open'); }
 
 document.getElementById('saveSettingsBtn').addEventListener('click', () => {
   const budgets = {
-    Housing: parseInt(document.getElementById('budgetHousing').value) || 950,
-    Groceries: parseInt(document.getElementById('budgetGroceries').value) || 300,
-    Dining: parseInt(document.getElementById('budgetDining').value) || 200,
-    Transport: parseInt(document.getElementById('budgetTransport').value) || 150,
+    Housing:       parseInt(document.getElementById('budgetHousing').value)       || 950,
+    Groceries:     parseInt(document.getElementById('budgetGroceries').value)     || 300,
+    Dining:        parseInt(document.getElementById('budgetDining').value)        || 200,
+    Transport:     parseInt(document.getElementById('budgetTransport').value)     || 150,
     Subscriptions: parseInt(document.getElementById('budgetSubscriptions').value) || 150,
   };
   store.set('budgets', budgets);
@@ -80,199 +86,190 @@ document.getElementById('saveSettingsBtn').addEventListener('click', () => {
   renderBudgetChart();
 });
 
-// ── Refresh ──────────────────────────────────────────────────────────────────
+// ── Refresh button ────────────────────────────────────────────────────────────
 document.getElementById('refreshBtn').addEventListener('click', async () => {
   const btn = document.getElementById('refreshBtn');
-  btn.style.animation = 'spin .7s linear infinite';
+  btn.querySelector('i').style.animation = 'spin .7s linear infinite';
   await loadAllData();
-  btn.style.animation = '';
+  btn.querySelector('i').style.animation = '';
 });
 
-// ── Connection dots ──────────────────────────────────────────────────────────
-function setConnDot(id, labelId, status) {
-  const dot = document.getElementById(id);
-  const lbl = document.getElementById(labelId);
-  dot.className = 'dot ' + (status === 'ok' ? '' : status === 'amber' ? 'amber' : 'red');
-  lbl.style.color = status === 'ok' ? 'var(--pos)' : status === 'amber' ? '#c97d00' : 'var(--t3)';
-}
-
-// ── Format helpers ───────────────────────────────────────────────────────────
-const fmt = (n, decimals = 2) => '€' + Number(n).toLocaleString('en-EU', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-const fmtSign = n => (n >= 0 ? '+' : '') + fmt(n);
-const fmtDate = d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-
-// ── Bunq API — via /api/bunq proxy (handles CORS + auth server-side) ──────────
+// ── Bunq proxy calls ──────────────────────────────────────────────────────────
 async function bunqProxy(action, params = {}, retried = false) {
   const qs = new URLSearchParams({ action, ...params }).toString();
   const res = await fetch(`/api/bunq?${qs}`);
   const json = await res.json();
   if (!res.ok && json.expired && !retried) return bunqProxy(action, params, true);
-  if (!res.ok) throw new Error(json.error || `Proxy error ${res.status}`);
+  if (!res.ok) throw new Error(json.error || `Bunq error ${res.status}`);
   return json;
 }
 
 async function loadBunq() {
-  if (!state.bunqKey) { setConnDot('bunqDot', 'bunqLabel', 'red'); return; }
+  setConn('bunq', 'loading');
   try {
-    // 1. Fetch accounts via proxy
     const { accounts } = await bunqProxy('accounts');
     state.bunqAccounts = accounts;
 
-    // 2. Sum balances
     let total = 0;
     for (const acc of accounts) {
       if (acc.balance) total += parseFloat(acc.balance.value || 0);
     }
 
-    // 3. Fetch payments from all active accounts
     state.bunqPayments = [];
-    for (const acc of accounts.filter(a => a.status === 'ACTIVE').slice(0, 3)) {
+    for (const acc of accounts.slice(0, 3)) {
       try {
         const { payments } = await bunqProxy('payments', { accountId: acc.id });
         state.bunqPayments.push(...payments);
-      } catch (e) { console.warn('Payments error for account', acc.id, e.message); }
+      } catch (e) { console.warn('Payments error', acc.id, e.message); }
     }
-    // Sort by date descending
     state.bunqPayments.sort((a, b) => new Date(b.created) - new Date(a.created));
 
-    // 4. Update UI
     document.getElementById('bunqBalance').textContent = fmt(total);
-    const monthlyChange = calcMonthlyChange(state.bunqPayments);
+    const change = calcMonthlyChange(state.bunqPayments);
     const sub = document.getElementById('bunqSub');
-    sub.textContent = (monthlyChange >= 0 ? '↑ ' : '↓ ') + fmt(Math.abs(monthlyChange)) + ' this month';
-    sub.className = 'metric-sub ' + (monthlyChange >= 0 ? 'pos' : 'neg');
-    setConnDot('bunqDot', 'bunqLabel', 'ok');
+    sub.textContent = (change >= 0 ? '↑ ' : '↓ ') + fmt(Math.abs(change)) + ' this month';
+    sub.className = 'metric-sub ' + (change >= 0 ? 'pos' : 'neg');
+    setConn('bunq', 'ok');
     updateNetWorth();
     renderSpendingChart();
     renderBudgetChart();
+    renderTransactions();
   } catch (err) {
-    console.error('Bunq error:', err);
+    console.error('Bunq:', err.message);
     document.getElementById('bunqBalance').textContent = 'Error';
     document.getElementById('bunqSub').textContent = err.message;
     document.getElementById('bunqSub').className = 'metric-sub neg';
-    setConnDot('bunqDot', 'bunqLabel', 'red');
+    setConn('bunq', 'error');
   }
 }
 
 function calcMonthlyChange(payments) {
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  let net = 0;
-  for (const p of payments) {
-    const d = new Date(p.created);
-    if (d >= startOfMonth) net += parseFloat(p.amount?.value || 0);
-  }
-  return net;
+  const start = new Date(); start.setDate(1); start.setHours(0,0,0,0);
+  return payments
+    .filter(p => new Date(p.created) >= start)
+    .reduce((sum, p) => sum + parseFloat(p.amount?.value || 0), 0);
 }
 
-// ── Alpaca API — via /api/alpaca proxy (handles CORS server-side) ─────────────
-async function alpacaProxy(action) {
-  const res = await fetch(`/api/alpaca?action=${action}`);
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || `Alpaca proxy error ${res.status}`);
-  return json;
-}
-
+// ── Alpaca proxy calls ────────────────────────────────────────────────────────
 async function loadAlpaca() {
-  if (!state.alpacaKey || !state.alpacaSecret) { setConnDot('alpacaDot', 'alpacaLabel', 'amber'); return; }
+  setConn('alpaca', 'loading');
   try {
-    const { account, positions } = await alpacaProxy('portfolio');
+    const { account, positions } = await fetch('/api/alpaca?action=portfolio').then(async r => {
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || `Alpaca error ${r.status}`);
+      return j;
+    });
     state.alpacaAccount = account;
     state.alpacaPositions = positions;
 
-    const equity = parseFloat(account.equity || 0);
-    const todayPL = parseFloat(account.equity || 0) - parseFloat(account.last_equity || 0);
+    const equity  = parseFloat(account.equity      || 0);
+    const todayPL = parseFloat(account.equity      || 0) - parseFloat(account.last_equity || 0);
 
     document.getElementById('alpacaValue').textContent = fmt(equity);
     const sub = document.getElementById('alpacaSub');
     sub.textContent = (todayPL >= 0 ? '↑ ' : '↓ ') + fmt(Math.abs(todayPL)) + ' today';
     sub.className = 'metric-sub ' + (todayPL >= 0 ? 'pos' : 'neg');
-    setConnDot('alpacaDot', 'alpacaLabel', 'ok');
+    setConn('alpaca', 'ok');
     updateNetWorth();
     renderPortfolioChart();
   } catch (err) {
-    console.error('Alpaca error:', err);
+    console.error('Alpaca:', err.message);
     document.getElementById('alpacaValue').textContent = 'Error';
     document.getElementById('alpacaSub').textContent = err.message;
     document.getElementById('alpacaSub').className = 'metric-sub neg';
-    setConnDot('alpacaDot', 'alpacaLabel', 'red');
+    setConn('alpaca', 'error');
   }
 }
 
 // ── Net worth ─────────────────────────────────────────────────────────────────
 function updateNetWorth() {
-  const bunqRaw = document.getElementById('bunqBalance').textContent.replace(/[€,]/g, '');
-  const alpacaRaw = document.getElementById('alpacaValue').textContent.replace(/[€,]/g, '');
-  const bunqVal = parseFloat(bunqRaw) || 0;
-  const alpacaVal = parseFloat(alpacaRaw) || 0;
-  if (bunqVal || alpacaVal) {
-    document.getElementById('netWorth').textContent = fmt(bunqVal + alpacaVal);
-  }
+  const b = parseFloat(document.getElementById('bunqBalance').textContent.replace(/[€.,\s]/g, '').replace(',', '.')) || 0;
+  const a = parseFloat(document.getElementById('alpacaValue').textContent.replace(/[€.,\s]/g, '').replace(',', '.')) || 0;
+  if (b || a) document.getElementById('netWorth').textContent = fmt(b + a);
+}
+
+// ── Categorise transactions ───────────────────────────────────────────────────
+function categorise(p) {
+  const s = (p.description || p.counterparty?.display_name || '').toLowerCase();
+  if (/rent|mortgage|huur|hypotheek/.test(s))                                         return 'Housing';
+  if (/mercadona|lidl|aldi|carrefour|eroski|consum|supermercado|grocery/.test(s))     return 'Groceries';
+  if (/restaurant|cafe|bar|bistro|pizza|burger|sushi|tagliatella|dining/.test(s))     return 'Dining';
+  if (/glovo|uber|taxi|bus|metro|tren|parking|petrol|gasolina|bp |repsol/.test(s))   return 'Transport';
+  if (/netflix|spotify|apple|adobe|amazon prime|hbo|disney/.test(s))                 return 'Subscriptions';
+  return 'Other';
 }
 
 // ── Spending chart ────────────────────────────────────────────────────────────
-function categorise(payment) {
-  const desc = (payment.description || payment.counterparty_alias?.display_name || '').toLowerCase();
-  if (/rent|mortgage|huur|hypotheek/.test(desc)) return 'Housing';
-  if (/mercadona|supermercado|lidl|aldi|carrefour|eroski|grocery|groceries/.test(desc)) return 'Groceries';
-  if (/restaurant|cafe|bar|bistro|pizz|burger|sushi|tagliatella|dining/.test(desc)) return 'Dining';
-  if (/glovo|uber|taxi|bus|metro|tren|parking|petrol|gasolina|transport/.test(desc)) return 'Transport';
-  return 'Other';
+function getLast5Months() {
+  return Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - (4 - i));
+    return {
+      label: d.toLocaleString('default', { month: 'short' }),
+      start: new Date(d.getFullYear(), d.getMonth(), 1),
+      end:   new Date(d.getFullYear(), d.getMonth() + 1, 1),
+    };
+  });
 }
 
 function renderSpendingChart() {
   const months = getLast5Months();
-  const cats = { Housing: [], Groceries: [], Dining: [], Transport: [], Other: [] };
+  const cats   = { Housing: [], Groceries: [], Dining: [], Transport: [], Other: [] };
 
   for (const { start, end } of months) {
     const totals = { Housing: 0, Groceries: 0, Dining: 0, Transport: 0, Other: 0 };
     for (const p of state.bunqPayments) {
-      const d = new Date(p.created);
       const amt = parseFloat(p.amount?.value || 0);
-      if (d >= start && d < end && amt < 0) {
+      if (new Date(p.created) >= start && new Date(p.created) < end && amt < 0) {
         const cat = categorise(p);
-        totals[cat] += Math.abs(amt);
+        const key = cat === 'Subscriptions' ? 'Other' : (totals[cat] !== undefined ? cat : 'Other');
+        totals[key] += Math.abs(amt);
       }
     }
-    for (const cat of Object.keys(cats)) cats[cat].push(Math.round(totals[cat]));
+    Object.keys(cats).forEach(k => cats[k].push(Math.round(totals[k])));
   }
 
-  const labels = months.map(m => m.label);
+  // Use sample data if no real data yet
+  const hasData = state.bunqPayments.length > 0;
+  const sampleData = {
+    Housing:   [950, 950, 950, 950, 950],
+    Groceries: [310, 280, 330, 295, 340],
+    Dining:    [180, 200, 210, 195, 276],
+    Transport: [120, 140, 110, 130, 105],
+    Other:     [280, 310, 260, 290, 450],
+  };
+
   const colors = ['#e7255a', '#f05a84', '#f78faa', '#fbc4d4', '#ccc9c1'];
-  const datasets = Object.entries(cats).map(([label, data], i) => ({
-    label, data, backgroundColor: colors[i]
+  const datasets = Object.entries(hasData ? cats : sampleData).map(([label, data], i) => ({
+    label, data, backgroundColor: colors[i],
   }));
 
   const ctx = document.getElementById('spendChart').getContext('2d');
   if (state.charts.spend) state.charts.spend.destroy();
   state.charts.spend = new Chart(ctx, {
     type: 'bar',
-    data: { labels, datasets },
-    options: chartOpts({ stacked: true, prefix: '€' })
+    data: { labels: months.map(m => m.label), datasets },
+    options: chartOpts({ stacked: true }),
   });
 }
 
+// ── Budget chart ──────────────────────────────────────────────────────────────
 function renderBudgetChart() {
-  // Build actuals from current month payments
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const actuals = { Housing: 0, Groceries: 0, Dining: 0, Transport: 0, Subscriptions: 0 };
+  const budgets = store.get('budgets') || { Housing: 950, Groceries: 300, Dining: 200, Transport: 150, Subscriptions: 150 };
+  const now = new Date(), start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const actuals = Object.fromEntries(Object.keys(budgets).map(k => [k, 0]));
+
   for (const p of state.bunqPayments) {
-    const d = new Date(p.created);
+    if (new Date(p.created) < start) continue;
     const amt = parseFloat(p.amount?.value || 0);
-    if (d >= start && amt < 0) {
-      const cat = categorise(p);
-      if (cat === 'Other') {
-        const desc = (p.description || '').toLowerCase();
-        if (/netflix|spotify|apple|adobe|subscription/.test(desc)) actuals.Subscriptions += Math.abs(amt);
-      } else { actuals[cat] += Math.abs(amt); }
-    }
+    if (amt >= 0) continue;
+    const cat = categorise(p);
+    if (actuals[cat] !== undefined) actuals[cat] += Math.abs(amt);
+    else if (cat === 'Subscriptions' && actuals.Subscriptions !== undefined) actuals.Subscriptions += Math.abs(amt);
   }
 
-  const budgets = store.get('budgets') || { Housing: 950, Groceries: 300, Dining: 200, Transport: 150, Subscriptions: 150 };
-  const labels = Object.keys(budgets);
-  const budgetData = labels.map(l => budgets[l]);
-  const actualData = labels.map(l => Math.round(actuals[l]));
+  const labels      = Object.keys(budgets);
+  const budgetData  = labels.map(l => budgets[l]);
+  const actualData  = labels.map(l => Math.round(actuals[l]));
   const actualColors = actualData.map((v, i) => v > budgetData[i] ? '#e7255a' : '#2a7d5f');
 
   const ctx = document.getElementById('budgetChart').getContext('2d');
@@ -283,51 +280,60 @@ function renderBudgetChart() {
       labels,
       datasets: [
         { label: 'Budget', data: budgetData, backgroundColor: '#ece9e0', borderRadius: 3 },
-        { label: 'Actual', data: actualData, backgroundColor: actualColors, borderRadius: 3 }
-      ]
+        { label: 'Actual', data: actualData, backgroundColor: actualColors, borderRadius: 3 },
+      ],
     },
-    options: chartOpts({ horizontal: true, prefix: '€' })
+    options: chartOpts({ horizontal: true }),
   });
 }
 
 // ── Portfolio chart ───────────────────────────────────────────────────────────
+function renderInvestments() {
+  if (!state.alpacaAccount) return;
+  renderPortfolioChart();
+
+  const equity    = parseFloat(state.alpacaAccount.equity      || 0);
+  const lastEquity = parseFloat(state.alpacaAccount.last_equity || 0);
+  const todayPL   = equity - lastEquity;
+  document.getElementById('portfolioVal').textContent  = fmt(equity);
+  document.getElementById('todayPL').textContent       = fmtSign(todayPL);
+  document.getElementById('todayPL').className         = 'metric-val ' + (todayPL >= 0 ? 'pos' : 'neg');
+  document.getElementById('todayPLSub').textContent    = lastEquity
+    ? ((todayPL / lastEquity * 100).toFixed(2) + '% today') : '';
+}
+
 function renderPortfolioChart() {
   if (!state.alpacaPositions.length) return;
 
-  // Group positions by sector/type (simplified)
   const groups = {};
-  for (const pos of state.alpacaPositions) {
-    const val = parseFloat(pos.market_value || 0);
-    const sym = pos.symbol;
-    // Simple grouping by first letter for demo; real app would use asset class
-    const group = sym.startsWith('V') || sym.startsWith('I') ? 'ETFs'
-      : sym.endsWith('USD') ? 'Crypto'
-      : 'Stocks';
+  for (const p of state.alpacaPositions) {
+    const val   = parseFloat(p.market_value || 0);
+    const group = /^V|^I/.test(p.symbol) ? 'ETFs' : 'Stocks';
     groups[group] = (groups[group] || 0) + val;
   }
   const cash = parseFloat(state.alpacaAccount?.cash || 0);
   if (cash > 0) groups['Cash'] = cash;
 
   const labels = Object.keys(groups);
-  const data = Object.values(groups).map(v => Math.round(v));
   const colors = ['#e7255a', '#f05a84', '#f78faa', '#fbc4d4', '#ccc9c1'];
 
   const ctx = document.getElementById('portfolioChart').getContext('2d');
   if (state.charts.portfolio) state.charts.portfolio.destroy();
   state.charts.portfolio = new Chart(ctx, {
     type: 'doughnut',
-    data: { labels, datasets: [{ data, backgroundColor: colors.slice(0, labels.length), borderWidth: 0, hoverOffset: 4 }] },
+    data: {
+      labels,
+      datasets: [{ data: Object.values(groups).map(v => Math.round(v)), backgroundColor: colors.slice(0, labels.length), borderWidth: 0, hoverOffset: 4 }],
+    },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '70%',
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + c.label + ': €' + c.parsed.toLocaleString() } } }
-    }
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + c.label + ': ' + fmt(c.parsed) } } },
+    },
   });
 
-  // Positions table
-  const container = document.getElementById('invRows');
   const sorted = [...state.alpacaPositions].sort((a, b) => parseFloat(b.market_value) - parseFloat(a.market_value));
-  container.innerHTML = sorted.map(p => {
-    const pl = parseFloat(p.unrealized_plpc || 0) * 100;
+  document.getElementById('invRows').innerHTML = sorted.map(p => {
+    const pl  = parseFloat(p.unrealized_plpc || 0) * 100;
     const cls = pl >= 0 ? 'pos' : 'neg';
     return `<div class="inv-row">
       <span class="inv-tk">${p.symbol}</span>
@@ -336,43 +342,26 @@ function renderPortfolioChart() {
       <span class="inv-ch ${cls}">${pl >= 0 ? '+' : ''}${pl.toFixed(1)}%</span>
     </div>`;
   }).join('');
-
-  // Investment metrics
-  const equity = parseFloat(state.alpacaAccount?.equity || 0);
-  const lastEquity = parseFloat(state.alpacaAccount?.last_equity || 0);
-  const todayPL = equity - lastEquity;
-  document.getElementById('portfolioVal').textContent = fmt(equity);
-  document.getElementById('todayPL').textContent = fmtSign(todayPL);
-  document.getElementById('todayPL').className = 'metric-val ' + (todayPL >= 0 ? 'pos' : 'neg');
-  document.getElementById('todayPLSub').textContent = lastEquity ? ((todayPL / lastEquity * 100).toFixed(2) + '% today') : '';
 }
 
 // ── Transactions ──────────────────────────────────────────────────────────────
 function renderTransactions() {
-  const container = document.getElementById('txList');
-  if (!state.bunqKey) {
-    container.innerHTML = '<div class="error-msg"><i class="ti ti-plug"></i>Connect Bunq in Settings to see transactions</div>';
-    return;
-  }
+  const el = document.getElementById('txList');
   if (!state.bunqPayments.length) {
-    container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading…</div>';
+    el.innerHTML = '<div class="loading"><div class="spinner"></div>Loading transactions…</div>';
     return;
   }
-
-  const catIcons = { Housing: 'ti-home', Groceries: 'ti-shopping-cart', Dining: 'ti-tool-kitchen-2', Transport: 'ti-car', Other: 'ti-dots' };
-  const catColors = { Housing: '#fdeef2', Groceries: '#fdeef2', Dining: '#fdeef2', Transport: '#fdeef2', Other: '#f2f1ed' };
-  const catIconColors = { Housing: '#e7255a', Groceries: '#e7255a', Dining: '#e7255a', Transport: '#e7255a', Other: '#9e9e9e' };
-
-  container.innerHTML = state.bunqPayments.slice(0, 30).map(p => {
-    const amt = parseFloat(p.amount?.value || 0);
+  const catIcons  = { Housing: 'ti-home', Groceries: 'ti-shopping-cart', Dining: 'ti-tool-kitchen-2', Transport: 'ti-car', Subscriptions: 'ti-device-mobile', Other: 'ti-dots' };
+  el.innerHTML = state.bunqPayments.slice(0, 40).map(p => {
+    const amt   = parseFloat(p.amount?.value || 0);
     const isPos = amt > 0;
-    const cat = isPos ? 'Income' : categorise(p);
-    const name = p.counterparty_alias?.display_name || p.description || 'Transaction';
-    const icon = isPos ? 'ti-arrow-down' : (catIcons[cat] || 'ti-dots');
-    const bg = isPos ? '#edf7f3' : (catColors[cat] || '#f2f1ed');
-    const iconColor = isPos ? '#2a7d5f' : (catIconColors[cat] || '#9e9e9e');
+    const cat   = isPos ? 'Income' : categorise(p);
+    const name  = p.counterparty?.display_name || p.description || 'Transaction';
+    const icon  = isPos ? 'ti-arrow-down' : (catIcons[cat] || 'ti-dots');
+    const bg    = isPos ? '#edf7f3' : '#fdeef2';
+    const ic    = isPos ? '#2a7d5f' : '#e7255a';
     return `<div class="tx">
-      <div class="tx-ico" style="background:${bg}"><i class="ti ${icon}" style="color:${iconColor}"></i></div>
+      <div class="tx-ico" style="background:${bg}"><i class="ti ${icon}" style="color:${ic}"></i></div>
       <div class="tx-info">
         <div class="tx-name">${name}</div>
         <div class="tx-cat">${cat} · ${fmtDate(p.created)}</div>
@@ -384,154 +373,118 @@ function renderTransactions() {
 
 // ── Goals ─────────────────────────────────────────────────────────────────────
 function renderGoals() {
-  renderGoalList('goalsList', state.goals);
+  renderGoalList('goalsList',   state.goals);
   renderGoalList('holidayList', state.holidays);
 }
 
-function renderGoalList(containerId, items) {
-  const el = document.getElementById(containerId);
+function renderGoalList(id, items) {
+  const el = document.getElementById(id);
   if (!items.length) {
-    el.innerHTML = '<p style="font-size:13px;color:var(--t3);text-align:center;padding:20px 0">No goals yet — tap + Add to create one</p>';
+    el.innerHTML = '<p style="font-size:13px;color:var(--t3);text-align:center;padding:20px 0">No goals yet — tap + Add</p>';
     return;
   }
   el.innerHTML = items.map(g => {
     const pct = Math.min(100, Math.round(g.saved / g.target * 100));
-    const remaining = g.target - g.saved;
-    const monthlyNeeded = (remaining / 3).toFixed(0);
     return `<div>
       <div class="goal-top">
         <span class="goal-name"><i class="ti ${g.icon}"></i>${g.name}${g.date ? ' · ' + g.date : ''}</span>
         <span class="goal-amt">${fmt(g.saved)} / ${fmt(g.target)}</span>
       </div>
       <div class="bar-bg"><div class="bar" style="width:${pct}%;background:${g.color}"></div></div>
-      <div class="goal-sub">${pct}% · ${fmt(remaining)} remaining</div>
+      <div class="goal-sub">${pct}% · ${fmt(g.target - g.saved)} remaining</div>
     </div>`;
   }).join('');
 }
 
-document.getElementById('addGoalBtn').addEventListener('click', () => promptAddGoal('goals'));
+document.getElementById('addGoalBtn').addEventListener('click',    () => promptAddGoal('goals'));
 document.getElementById('addHolidayBtn').addEventListener('click', () => promptAddGoal('holidays'));
 
 function promptAddGoal(type) {
-  const name = prompt('Goal name:');
-  if (!name) return;
-  const target = parseFloat(prompt('Target amount (€):'));
-  if (!target) return;
-  const saved = parseFloat(prompt('Amount already saved (€):') || '0');
-  const newGoal = {
-    id: Date.now(), name, icon: type === 'holidays' ? 'ti-plane' : 'ti-target',
-    target, saved: saved || 0, color: '#e7255a',
-    ...(type === 'holidays' ? { date: prompt('Travel date (e.g. Aug 2026):') || '' } : {})
-  };
-  state[type].push(newGoal);
+  const name   = prompt('Goal name:');             if (!name)   return;
+  const target = parseFloat(prompt('Target (€):')); if (!target) return;
+  const saved  = parseFloat(prompt('Saved so far (€):') || '0');
+  const goal   = { id: Date.now(), name, icon: type === 'holidays' ? 'ti-plane' : 'ti-target', target, saved: saved || 0, color: '#e7255a' };
+  if (type === 'holidays') goal.date = prompt('Travel date (e.g. Aug 2026):') || '';
+  state[type].push(goal);
   store.set(type, state[type]);
   renderGoals();
 }
 
 // ── AI Insights ───────────────────────────────────────────────────────────────
-document.getElementById('analyzeBtn').addEventListener('click', runAIAnalysis);
+document.getElementById('analyzeBtn').addEventListener('click', runAI);
 
-async function runAIAnalysis() {
+async function runAI() {
+  const aiList = document.getElementById('aiList');
+  const btn    = document.getElementById('analyzeBtn');
+  aiList.innerHTML = '<div class="loading"><div class="spinner"></div>Analysing your spending…</div>';
+  btn.disabled = true;
 
+  const txSummary        = state.bunqPayments.slice(0, 50).map(p => ({
+    date: p.created?.slice(0, 10),
+    description: p.counterparty?.display_name || p.description,
+    amount: parseFloat(p.amount?.value || 0),
+  }));
+  const portfolioSummary = state.alpacaPositions.map(p => ({
+    symbol: p.symbol, value: parseFloat(p.market_value || 0),
+    pl_pct: (parseFloat(p.unrealized_plpc || 0) * 100).toFixed(1),
+  }));
+  const goals = [...state.goals, ...state.holidays].map(g => ({
+    name: g.name, target: g.target, saved: g.saved, pct: Math.round(g.saved / g.target * 100),
+  }));
 
-  document.getElementById('aiList').innerHTML = '<div class="loading"><div class="spinner"></div>Analysing your spending…</div>';
-  document.getElementById('analyzeBtn').disabled = true;
+  const prompt = `You are a personal finance advisor. Analyse this household's finances and give specific, actionable insights.
+
+Transactions (last 50): ${JSON.stringify(txSummary)}
+Portfolio: ${JSON.stringify(portfolioSummary)}
+Goals: ${JSON.stringify(goals)}
+
+Respond ONLY with a JSON array of exactly 4 insight objects, no markdown:
+[{"type":"warn|good|mag","title":"Short title max 8 words","body":"2-3 sentences with specific amounts."}]
+Types: warn=overspending/risk, good=positive/on track, mag=info/tip`;
 
   try {
-    const txSummary = state.bunqPayments.slice(0, 50).map(p => ({
-      date: p.created?.slice(0, 10),
-      description: p.counterparty_alias?.display_name || p.description,
-      amount: parseFloat(p.amount?.value || 0)
-    }));
-
-    const portfolioSummary = state.alpacaPositions.map(p => ({
-      symbol: p.symbol,
-      value: parseFloat(p.market_value || 0),
-      pl_pct: (parseFloat(p.unrealized_plpc || 0) * 100).toFixed(1)
-    }));
-
-    const goals = [...state.goals, ...state.holidays].map(g => ({
-      name: g.name, target: g.target, saved: g.saved, pct: Math.round(g.saved / g.target * 100)
-    }));
-
-    const prompt = `You are a personal finance advisor analysing a household's finances. Be specific, helpful, and concise.
-
-Recent transactions (last 50):
-${JSON.stringify(txSummary, null, 2)}
-
-Investment portfolio:
-${JSON.stringify(portfolioSummary, null, 2)}
-
-Savings goals:
-${JSON.stringify(goals, null, 2)}
-
-Provide exactly 4 insights in this JSON format (respond ONLY with valid JSON, no markdown):
-[
-  { "type": "warn|good|mag", "title": "Short title (max 8 words)", "body": "2-3 sentence insight with specific amounts and actionable advice." },
-  ...
-]
-
-Types: "warn" = overspending/risk (amber), "good" = positive/on track (green), "mag" = info/tip (magenta).`;
-
-    const res = await fetch('/api/ai', {
+    const res  = await fetch('/api/ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt })
+      body: JSON.stringify({ prompt }),
     });
-
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'AI request failed');
-    const text = data.text || '[]';
-    const insights = JSON.parse(text.replace(/```json|```/g, '').trim());
+    if (!res.ok) throw new Error(data.error || 'AI error');
 
-    const iconMap = { warn: 'ti-alert-triangle', good: 'ti-circle-check', mag: 'ti-lightbulb' };
-    document.getElementById('aiList').innerHTML = insights.map(ins => `
+    const insights = JSON.parse(data.text.replace(/```json|```/g, '').trim());
+    const iconMap  = { warn: 'ti-alert-triangle', good: 'ti-circle-check', mag: 'ti-lightbulb' };
+    aiList.innerHTML = insights.map(ins => `
       <div class="ins ins-${ins.type}">
         <i class="ti ${iconMap[ins.type] || 'ti-info-circle'}"></i>
         <div class="ins-body"><div class="ins-title">${ins.title}</div>${ins.body}</div>
       </div>`).join('');
 
-    const now = new Date();
     document.getElementById('aiUpdated').style.display = 'flex';
-    document.getElementById('aiUpdatedText').textContent = 'Last analysed ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('aiUpdatedText').textContent =
+      'Last analysed ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   } catch (err) {
-    console.error('AI error:', err);
-    document.getElementById('aiList').innerHTML = `<div class="error-msg"><i class="ti ti-alert-circle"></i>${err.message}</div>`;
+    aiList.innerHTML = `<div class="error-msg"><i class="ti ti-alert-circle"></i>${err.message}</div>`;
   } finally {
-    document.getElementById('analyzeBtn').disabled = false;
+    btn.disabled = false;
   }
 }
 
 // ── Chart helper ──────────────────────────────────────────────────────────────
-function chartOpts({ stacked = false, horizontal = false, prefix = '' } = {}) {
+function chartOpts({ stacked = false, horizontal = false } = {}) {
   const gc = 'rgba(0,0,0,0.05)', tc = '#a0a0a0';
-  const opts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + prefix + (horizontal ? c.parsed.x : c.parsed.y).toLocaleString() } } },
-    scales: {}
-  };
   const xKey = horizontal ? 'y' : 'x';
   const yKey = horizontal ? 'x' : 'y';
-  opts.scales[xKey] = { stacked, ticks: { color: tc, font: { size: 11 } }, grid: { display: horizontal }, border: { display: false } };
-  if (horizontal) opts.scales[xKey].grid = { color: gc };
-  opts.scales[yKey] = { stacked, ticks: { color: tc, font: { size: 11 }, callback: v => prefix + v.toLocaleString() }, grid: { color: horizontal ? false : gc }, border: { display: false } };
-  if (horizontal) { opts.scales[xKey].grid = { color: gc }; opts.scales[yKey].grid = { display: false }; }
-  return opts;
-}
-
-// ── Date helpers ──────────────────────────────────────────────────────────────
-function getLast5Months() {
-  const months = [];
-  const now = new Date();
-  for (let i = 4; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({
-      label: d.toLocaleString('default', { month: 'short' }),
-      start: new Date(d.getFullYear(), d.getMonth(), 1),
-      end: new Date(d.getFullYear(), d.getMonth() + 1, 1)
-    });
-  }
-  return months;
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: c => ' €' + (horizontal ? c.parsed.x : c.parsed.y).toLocaleString() } },
+    },
+    scales: {
+      [xKey]: { stacked, ticks: { color: tc, font: { size: 11 } }, grid: { color: horizontal ? gc : false }, border: { display: false } },
+      [yKey]: { stacked, ticks: { color: tc, font: { size: 11 }, callback: v => '€' + v.toLocaleString() }, grid: { color: horizontal ? false : gc }, border: { display: false } },
+    },
+  };
 }
 
 // ── Load all data ─────────────────────────────────────────────────────────────
@@ -541,16 +494,11 @@ async function loadAllData() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(console.warn);
-}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(console.warn);
 
-// Render goals immediately (they're local)
+setConn('bunq',   'loading');
+setConn('alpaca', 'loading');
 renderGoals();
-
-// Render fallback charts with sample data until real data loads
 renderSpendingChart();
 renderBudgetChart();
-
-// Always load live data — keys are server-side
 loadAllData();

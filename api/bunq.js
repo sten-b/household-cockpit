@@ -1,8 +1,34 @@
 import { createSign, generateKeyPairSync } from 'crypto';
-import { kv } from '@vercel/kv';
 
 const BUNQ_BASE = 'https://api.bunq.com';
+const KV_URL    = process.env.UPSTASH_REDIS_REST_URL;
+const KV_TOKEN  = process.env.UPSTASH_REDIS_REST_TOKEN;
+const CTX_KEY   = 'bunq_context';
+const CTX_TTL   = 60 * 60 * 24 * 6; // 6 days in seconds
 
+// ── Upstash REST helpers ──────────────────────────────────────────────────────
+async function kvGet(key) {
+  const res  = await fetch(`${KV_URL}/get/${key}`, {
+    headers: { Authorization: `Bearer ${KV_TOKEN}` }
+  });
+  const json = await res.json();
+  if (!json.result) return null;
+  return JSON.parse(json.result);
+}
+
+async function kvSet(key, value, ttl) {
+  await fetch(`${KV_URL}/set/${key}/${encodeURIComponent(JSON.stringify(value))}${ttl ? `/ex/${ttl}` : ''}`, {
+    headers: { Authorization: `Bearer ${KV_TOKEN}` }
+  });
+}
+
+async function kvDel(key) {
+  await fetch(`${KV_URL}/del/${key}`, {
+    headers: { Authorization: `Bearer ${KV_TOKEN}` }
+  });
+}
+
+// ── RSA signing ───────────────────────────────────────────────────────────────
 function signBody(body, privateKeyPem) {
   const sign = createSign('SHA256');
   sign.update(body || '');
@@ -10,6 +36,7 @@ function signBody(body, privateKeyPem) {
   return sign.sign(privateKeyPem, 'base64');
 }
 
+// ── Raw Bunq HTTP ─────────────────────────────────────────────────────────────
 async function bunqFetch(endpoint, method = 'GET', body = null, token = null, privateKeyPem = null) {
   const bodyStr = body ? JSON.stringify(body) : '';
   const headers = {
@@ -21,100 +48,92 @@ async function bunqFetch(endpoint, method = 'GET', body = null, token = null, pr
     'X-Bunq-Geolocation': '0 0 0 0 NL',
     'X-Bunq-Client-Request-Id': crypto.randomUUID(),
   };
-  if (token) headers['X-Bunq-Client-Authentication'] = token;
-  if (privateKeyPem && bodyStr) {
-    headers['X-Bunq-Client-Signature'] = signBody(bodyStr, privateKeyPem);
-  }
-  const opts = { method, headers };
-  if (bodyStr) opts.body = bodyStr;
-  const res = await fetch(BUNQ_BASE + endpoint, opts);
+  if (token)         headers['X-Bunq-Client-Authentication'] = token;
+  if (privateKeyPem && bodyStr) headers['X-Bunq-Client-Signature'] = signBody(bodyStr, privateKeyPem);
+
+  const res  = await fetch(BUNQ_BASE + endpoint, { method, headers, ...(bodyStr ? { body: bodyStr } : {}) });
   const text = await res.text();
   let json;
   try { json = JSON.parse(text); } catch { json = { Error: [{ error_description: text }] }; }
   return { ok: res.ok, status: res.status, json };
 }
 
+// ── Build or reuse Bunq context ───────────────────────────────────────────────
 async function getContext(apiKey) {
-  const kvKey = `bunq_context`;
-
-  let ctx = await kv.get(kvKey);
-  if (ctx) {
-    console.log('Reusing Bunq context from KV');
-    return ctx;
+  // Try cache first
+  const cached = await kvGet(CTX_KEY);
+  if (cached) {
+    console.log('Reusing Bunq context from Upstash');
+    return cached;
   }
 
-  console.log('Running full Bunq installation flow');
+  console.log('Running Bunq installation flow');
 
+  // Generate RSA key pair
   const { publicKey, privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+    publicKeyEncoding:  { type: 'spki',  format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
   });
 
-  // Step 1: Installation
-  const installRes = await bunqFetch('/v1/installation', 'POST', { client_public_key: publicKey });
-  if (!installRes.ok) {
-    throw new Error('Installation failed: ' + (installRes.json?.Error?.[0]?.error_description || installRes.status));
-  }
-  const installToken = installRes.json.Response?.find(r => r.Token)?.Token?.token;
+  // 1. Installation
+  const instRes = await bunqFetch('/v1/installation', 'POST', { client_public_key: publicKey });
+  if (!instRes.ok) throw new Error('Installation failed: ' + (instRes.json?.Error?.[0]?.error_description || instRes.status));
+  const installToken = instRes.json.Response?.find(r => r.Token)?.Token?.token;
   if (!installToken) throw new Error('No installation token received');
 
-  // Step 2: Device server
-  const deviceRes = await bunqFetch('/v1/device-server', 'POST', {
-    description: 'Household Cockpit',
-    secret: apiKey,
-    permitted_ips: ['*']
-  }, installToken, privateKey);
-  if (!deviceRes.ok && deviceRes.status !== 409) {
-    throw new Error('Device registration failed: ' + (deviceRes.json?.Error?.[0]?.error_description || deviceRes.status));
-  }
+  // 2. Device server
+  const devRes = await bunqFetch('/v1/device-server', 'POST',
+    { description: 'Household Cockpit', secret: apiKey, permitted_ips: ['*'] },
+    installToken, privateKey
+  );
+  if (!devRes.ok && devRes.status !== 409) throw new Error('Device registration failed: ' + (devRes.json?.Error?.[0]?.error_description || devRes.status));
 
-  // Step 3: Session
+  // 3. Session
   const sessRes = await bunqFetch('/v1/session-server', 'POST', { secret: apiKey }, installToken, privateKey);
-  if (!sessRes.ok) {
-    throw new Error('Session failed: ' + (sessRes.json?.Error?.[0]?.error_description || sessRes.status));
-  }
+  if (!sessRes.ok) throw new Error('Session failed: ' + (sessRes.json?.Error?.[0]?.error_description || sessRes.status));
 
-  const sessResp = sessRes.json.Response || [];
-  const sessionToken = sessResp.find(r => r.Token)?.Token?.token;
-  const userObj = sessResp.find(r => r.UserPerson || r.UserCompany || r.UserApiKey);
-  const user = userObj?.UserPerson || userObj?.UserCompany || userObj?.UserApiKey;
-  const userId = user?.id;
+  const resp         = sessRes.json.Response || [];
+  const sessionToken = resp.find(r => r.Token)?.Token?.token;
+  const userObj      = resp.find(r => r.UserPerson || r.UserCompany || r.UserApiKey);
+  const user         = userObj?.UserPerson || userObj?.UserCompany || userObj?.UserApiKey;
+  const userId       = user?.id;
   if (!sessionToken || !userId) throw new Error('Could not extract session token or user ID');
 
-  ctx = { privateKey, installToken, sessionToken, userId, createdAt: Date.now() };
-  await kv.set(kvKey, ctx, { ex: 60 * 60 * 24 * 6 });
-  console.log('Bunq context saved to KV');
+  const ctx = { privateKey, installToken, sessionToken, userId, createdAt: Date.now() };
+  await kvSet(CTX_KEY, ctx, CTX_TTL);
+  console.log('Bunq context saved to Upstash');
   return ctx;
 }
 
 async function getValidSession(apiKey) {
-  const kvKey = `bunq_context`;
   let ctx = await getContext(apiKey);
 
-  const ageHours = (Date.now() - ctx.createdAt) / 1000 / 60 / 60;
+  // Refresh session if older than 23 hours
+  const ageHours = (Date.now() - ctx.createdAt) / 3600000;
   if (ageHours > 23) {
-    console.log('Refreshing Bunq session');
+    console.log('Refreshing Bunq session token');
     const sessRes = await bunqFetch('/v1/session-server', 'POST', { secret: apiKey }, ctx.installToken, ctx.privateKey);
     if (sessRes.ok) {
       const sessionToken = sessRes.json.Response?.find(r => r.Token)?.Token?.token;
       if (sessionToken) {
-        ctx.sessionToken = sessionToken;
-        ctx.createdAt = Date.now();
-        await kv.set(kvKey, ctx, { ex: 60 * 60 * 24 * 6 });
+        ctx = { ...ctx, sessionToken, createdAt: Date.now() };
+        await kvSet(CTX_KEY, ctx, CTX_TTL);
       }
     }
   }
   return ctx;
 }
 
+// ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // Read API key from environment variable — not from browser
+  if (!KV_URL || !KV_TOKEN) return res.status(500).json({ error: 'UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set' });
+
   const apiKey = process.env.BUNQ_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'BUNQ_API_KEY environment variable not set' });
 
@@ -124,28 +143,19 @@ export default async function handler(req, res) {
     const { sessionToken, userId, privateKey } = await getValidSession(apiKey);
 
     if (action === 'accounts') {
-      const { ok, json, status } = await bunqFetch(
-        `/v1/user/${userId}/monetary-account`,
-        'GET', null, sessionToken, privateKey
-      );
+      const { ok, json, status } = await bunqFetch(`/v1/user/${userId}/monetary-account`, 'GET', null, sessionToken, privateKey);
       if (!ok) {
-        if (status === 401) await kv.del('bunq_context');
-        return res.status(status).json({
-          error: json?.Error?.[0]?.error_description || 'Failed to fetch accounts',
-          expired: status === 401
-        });
+        if (status === 401) await kvDel(CTX_KEY);
+        return res.status(status).json({ error: json?.Error?.[0]?.error_description || 'Failed', expired: status === 401 });
       }
       const accounts = (json.Response || [])
         .map(r => r.MonetaryAccountBank || r.MonetaryAccountSavings || r.MonetaryAccount)
         .filter(Boolean)
         .filter(a => a.status === 'ACTIVE')
         .map(a => ({
-          id: a.id,
-          description: a.description,
-          balance: a.balance,
-          currency: a.currency,
-          status: a.status,
-          iban: a.alias?.find(al => al.type === 'IBAN')?.value
+          id: a.id, description: a.description, balance: a.balance,
+          currency: a.currency, status: a.status,
+          iban: a.alias?.find(al => al.type === 'IBAN')?.value,
         }));
       return res.status(200).json({ accounts });
     }
@@ -157,22 +167,14 @@ export default async function handler(req, res) {
         'GET', null, sessionToken, privateKey
       );
       if (!ok) {
-        if (status === 401) await kv.del('bunq_context');
-        return res.status(status).json({
-          error: json?.Error?.[0]?.error_description || 'Failed to fetch payments',
-          expired: status === 401
-        });
+        if (status === 401) await kvDel(CTX_KEY);
+        return res.status(status).json({ error: json?.Error?.[0]?.error_description || 'Failed', expired: status === 401 });
       }
       const payments = (json.Response || [])
-        .map(r => r.Payment)
-        .filter(Boolean)
+        .map(r => r.Payment).filter(Boolean)
         .map(p => ({
-          id: p.id,
-          created: p.created,
-          amount: p.amount,
-          description: p.description,
-          type: p.type,
-          counterparty: p.counterparty_alias
+          id: p.id, created: p.created, amount: p.amount,
+          description: p.description, type: p.type, counterparty: p.counterparty_alias,
         }));
       return res.status(200).json({ payments });
     }
@@ -181,7 +183,7 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('Bunq error:', err.message);
-    try { await kv.del('bunq_context'); } catch {}
+    try { await kvDel(CTX_KEY); } catch {}
     return res.status(500).json({ error: err.message });
   }
 }
