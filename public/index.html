@@ -190,36 +190,34 @@
   <div class="settings-overlay" id="settingsOverlay">
     <div class="settings-sheet">
       <div class="sheet-handle"></div>
-      <div class="sheet-title"><i class="ti ti-plug-connected"></i>API connections</div>
+      <div class="sheet-title"><i class="ti ti-adjustments"></i>Settings</div>
 
-      <div class="section-sep">Bunq <span style="font-weight:400;font-size:10px;text-transform:none;letter-spacing:0">— Production</span></div>
-      <div class="conn-status pending" id="bunqStatus"><i class="ti ti-circle-dashed"></i>Not connected</div>
+      <div class="section-sep">Monthly budgets</div>
       <div class="field">
-        <label><i class="ti ti-key"></i>API key</label>
-        <input type="password" id="bunqKeyInput" placeholder="Paste your Bunq API key" autocomplete="off" autocorrect="off" spellcheck="false">
-      </div>
-
-      <div class="section-sep">Alpaca <span style="font-weight:400;font-size:10px;text-transform:none;letter-spacing:0">— Paper trading</span></div>
-      <div class="conn-status pending" id="alpacaStatus"><i class="ti ti-circle-dashed"></i>Not connected</div>
-      <div class="field">
-        <label><i class="ti ti-key"></i>API key ID</label>
-        <input type="password" id="alpacaKeyInput" placeholder="PKXXXXXXXXXXXXXXXX" autocomplete="off" autocorrect="off" spellcheck="false">
+        <label><i class="ti ti-home"></i>Housing (€)</label>
+        <input type="number" id="budgetHousing" placeholder="950">
       </div>
       <div class="field">
-        <label><i class="ti ti-lock"></i>Secret key</label>
-        <input type="password" id="alpacaSecretInput" placeholder="••••••••••••••••••••••" autocomplete="off" autocorrect="off" spellcheck="false">
+        <label><i class="ti ti-shopping-cart"></i>Groceries (€)</label>
+        <input type="number" id="budgetGroceries" placeholder="300">
       </div>
-
-      <div class="section-sep">Anthropic <span style="font-weight:400;font-size:10px;text-transform:none;letter-spacing:0">— AI insights</span></div>
       <div class="field">
-        <label><i class="ti ti-brain"></i>API key</label>
-        <input type="password" id="anthropicKeyInput" placeholder="sk-ant-••••••••••••••••" autocomplete="off" autocorrect="off" spellcheck="false">
+        <label><i class="ti ti-tool-kitchen-2"></i>Dining (€)</label>
+        <input type="number" id="budgetDining" placeholder="200">
+      </div>
+      <div class="field">
+        <label><i class="ti ti-car"></i>Transport (€)</label>
+        <input type="number" id="budgetTransport" placeholder="150">
+      </div>
+      <div class="field">
+        <label><i class="ti ti-device-mobile"></i>Subscriptions (€)</label>
+        <input type="number" id="budgetSubscriptions" placeholder="150">
       </div>
 
       <button class="save-btn" id="saveSettingsBtn">
-        <i class="ti ti-device-floppy"></i>Save & connect
+        <i class="ti ti-device-floppy"></i>Save settings
       </button>
-      <div class="hint"><i class="ti ti-lock" style="font-size:12px"></i>Stored in your browser only — never sent to any server</div>
+      <div class="hint"><i class="ti ti-lock" style="font-size:12px"></i>API keys are securely stored server-side</div>
     </div>
   </div>
 

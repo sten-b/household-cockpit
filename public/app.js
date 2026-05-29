@@ -9,10 +9,7 @@ const store = {
 
 // ── State ────────────────────────────────────────────────────────────────────
 const state = {
-  bunqKey: store.get('bunqKey') || '',
-  alpacaKey: store.get('alpacaKey') || '',
-  alpacaSecret: store.get('alpacaSecret') || '',
-  anthropicKey: store.get('anthropicKey') || '',
+  // API keys are stored server-side as Vercel env vars
   goals: store.get('goals') || defaultGoals(),
   holidays: store.get('holidays') || defaultHolidays(),
   bunqAccounts: [],
@@ -59,47 +56,28 @@ document.getElementById('settingsBtn').addEventListener('click', openSettings);
 overlay.addEventListener('click', e => { if (e.target === overlay) closeSettings(); });
 
 function openSettings() {
-  document.getElementById('bunqKeyInput').value = state.bunqKey;
-  document.getElementById('alpacaKeyInput').value = state.alpacaKey;
-  document.getElementById('alpacaSecretInput').value = state.alpacaSecret;
-  document.getElementById('anthropicKeyInput').value = state.anthropicKey;
-  updateSettingsStatus();
+  const budgets = store.get('budgets') || {};
+  document.getElementById('budgetHousing').value = budgets.Housing || 950;
+  document.getElementById('budgetGroceries').value = budgets.Groceries || 300;
+  document.getElementById('budgetDining').value = budgets.Dining || 200;
+  document.getElementById('budgetTransport').value = budgets.Transport || 150;
+  document.getElementById('budgetSubscriptions').value = budgets.Subscriptions || 150;
   overlay.classList.add('open');
 }
 
 function closeSettings() { overlay.classList.remove('open'); }
 
-function updateSettingsStatus() {
-  const bs = document.getElementById('bunqStatus');
-  const as = document.getElementById('alpacaStatus');
-  if (state.bunqKey) {
-    bs.className = 'conn-status ok';
-    bs.innerHTML = '<i class="ti ti-circle-check"></i>Connected';
-  } else {
-    bs.className = 'conn-status pending';
-    bs.innerHTML = '<i class="ti ti-circle-dashed"></i>Not connected';
-  }
-  if (state.alpacaKey && state.alpacaSecret) {
-    as.className = 'conn-status ok';
-    as.innerHTML = '<i class="ti ti-circle-check"></i>Connected';
-  } else {
-    as.className = 'conn-status pending';
-    as.innerHTML = '<i class="ti ti-circle-dashed"></i>Not connected';
-  }
-}
-
-document.getElementById('saveSettingsBtn').addEventListener('click', async () => {
-  state.bunqKey = document.getElementById('bunqKeyInput').value.trim();
-  state.alpacaKey = document.getElementById('alpacaKeyInput').value.trim();
-  state.alpacaSecret = document.getElementById('alpacaSecretInput').value.trim();
-  state.anthropicKey = document.getElementById('anthropicKeyInput').value.trim();
-  store.set('bunqKey', state.bunqKey);
-  store.set('alpacaKey', state.alpacaKey);
-  store.set('alpacaSecret', state.alpacaSecret);
-  store.set('anthropicKey', state.anthropicKey);
-  updateSettingsStatus();
+document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+  const budgets = {
+    Housing: parseInt(document.getElementById('budgetHousing').value) || 950,
+    Groceries: parseInt(document.getElementById('budgetGroceries').value) || 300,
+    Dining: parseInt(document.getElementById('budgetDining').value) || 200,
+    Transport: parseInt(document.getElementById('budgetTransport').value) || 150,
+    Subscriptions: parseInt(document.getElementById('budgetSubscriptions').value) || 150,
+  };
+  store.set('budgets', budgets);
   closeSettings();
-  await loadAllData();
+  renderBudgetChart();
 });
 
 // ── Refresh ──────────────────────────────────────────────────────────────────
@@ -124,12 +102,11 @@ const fmtSign = n => (n >= 0 ? '+' : '') + fmt(n);
 const fmtDate = d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
 // ── Bunq API — via /api/bunq proxy (handles CORS + auth server-side) ──────────
-async function bunqProxy(action, params = {}) {
+async function bunqProxy(action, params = {}, retried = false) {
   const qs = new URLSearchParams({ action, ...params }).toString();
-  const res = await fetch(`/api/bunq?${qs}`, {
-    headers: { 'X-Bunq-Api-Key': state.bunqKey }
-  });
+  const res = await fetch(`/api/bunq?${qs}`);
   const json = await res.json();
+  if (!res.ok && json.expired && !retried) return bunqProxy(action, params, true);
   if (!res.ok) throw new Error(json.error || `Proxy error ${res.status}`);
   return json;
 }
@@ -188,33 +165,23 @@ function calcMonthlyChange(payments) {
   return net;
 }
 
-// ── Alpaca API ────────────────────────────────────────────────────────────────
-const ALPACA_BASE = 'https://paper-api.alpaca.markets';
-
-async function alpacaRequest(endpoint) {
-  const res = await fetch(ALPACA_BASE + endpoint, {
-    headers: {
-      'APCA-API-KEY-ID': state.alpacaKey,
-      'APCA-API-SECRET-KEY': state.alpacaSecret
-    }
-  });
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.message || `Alpaca ${res.status}`); }
-  return res.json();
+// ── Alpaca API — via /api/alpaca proxy (handles CORS server-side) ─────────────
+async function alpacaProxy(action) {
+  const res = await fetch(`/api/alpaca?action=${action}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || `Alpaca proxy error ${res.status}`);
+  return json;
 }
 
 async function loadAlpaca() {
   if (!state.alpacaKey || !state.alpacaSecret) { setConnDot('alpacaDot', 'alpacaLabel', 'amber'); return; }
   try {
-    const [account, positions] = await Promise.all([
-      alpacaRequest('/v2/account'),
-      alpacaRequest('/v2/positions')
-    ]);
+    const { account, positions } = await alpacaProxy('portfolio');
     state.alpacaAccount = account;
     state.alpacaPositions = positions;
 
     const equity = parseFloat(account.equity || 0);
     const todayPL = parseFloat(account.equity || 0) - parseFloat(account.last_equity || 0);
-    const pct = account.last_equity ? (todayPL / parseFloat(account.last_equity) * 100) : 0;
 
     document.getElementById('alpacaValue').textContent = fmt(equity);
     const sub = document.getElementById('alpacaSub');
@@ -465,10 +432,7 @@ function promptAddGoal(type) {
 document.getElementById('analyzeBtn').addEventListener('click', runAIAnalysis);
 
 async function runAIAnalysis() {
-  if (!state.anthropicKey) {
-    document.getElementById('aiList').innerHTML = '<div class="error-msg"><i class="ti ti-key"></i>Add your Anthropic API key in Settings to enable AI insights</div>';
-    return;
-  }
+
 
   document.getElementById('aiList').innerHTML = '<div class="loading"><div class="spinner"></div>Analysing your spending…</div>';
   document.getElementById('analyzeBtn').disabled = true;
@@ -509,22 +473,15 @@ Provide exactly 4 insights in this JSON format (respond ONLY with valid JSON, no
 
 Types: "warn" = overspending/risk (amber), "good" = positive/on track (green), "mag" = info/tip (magenta).`;
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('/api/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': state.anthropicKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
     });
 
     const data = await res.json();
-    const text = data.content?.[0]?.text || '[]';
+    if (!res.ok) throw new Error(data.error || 'AI request failed');
+    const text = data.text || '[]';
     const insights = JSON.parse(text.replace(/```json|```/g, '').trim());
 
     const iconMap = { warn: 'ti-alert-triangle', good: 'ti-circle-check', mag: 'ti-lightbulb' };
@@ -588,10 +545,6 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(console.warn);
 }
 
-// Pre-fill settings status if keys exist
-if (state.bunqKey) setConnDot('bunqDot', 'bunqLabel', 'amber');
-if (state.alpacaKey) setConnDot('alpacaDot', 'alpacaLabel', 'amber');
-
 // Render goals immediately (they're local)
 renderGoals();
 
@@ -599,5 +552,5 @@ renderGoals();
 renderSpendingChart();
 renderBudgetChart();
 
-// Load live data if keys present
-if (state.bunqKey || state.alpacaKey) loadAllData();
+// Always load live data — keys are server-side
+loadAllData();
