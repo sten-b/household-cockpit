@@ -147,19 +147,14 @@
     <div class="settings-sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-title"><i class="ti ti-adjustments"></i>Settings</div>
-      <div class="section-sep">Account mapping</div>
-      <p class="hint-text">Map your Bunq accounts to the right tabs. Enter the account description exactly as it appears in Bunq.</p>
-      <div class="field">
-        <label><i class="ti ti-building"></i>Flii Media account name</label>
-        <input type="text" id="settingFlii" placeholder="Flii Media">
-      </div>
-      <div class="field">
-        <label><i class="ti ti-briefcase"></i>SB Holding account name</label>
-        <input type="text" id="settingHolding" placeholder="SB Holding">
-      </div>
-      <div class="field">
-        <label><i class="ti ti-plane"></i>Savings account name(s)</label>
-        <input type="text" id="settingSavings" placeholder="e.g. Bruiloft, Vakantie">
+      <div class="section-sep">Account routing</div>
+      <p class="hint-text">Accounts are automatically routed based on your Bunq setup:</p>
+      <div class="account-list">
+        <div class="account-row"><span class="account-name"><i class="ti ti-building"></i>Flii Media</span><span class="account-tab">Flii Media tab</span></div>
+        <div class="account-row"><span class="account-name"><i class="ti ti-briefcase"></i>SB Holding</span><span class="account-tab">SB Holding tab</span></div>
+        <div class="account-row"><span class="account-name"><i class="ti ti-wallet"></i>Rekeningen</span><span class="account-tab">Budget tab</span></div>
+        <div class="account-row"><span class="account-name"><i class="ti ti-users"></i>Vast Samen</span><span class="account-tab">Budget tab</span></div>
+        <div class="account-row"><span class="account-name"><i class="ti ti-pig-money"></i>Bruiloft</span><span class="account-tab">Savings tab</span></div>
       </div>
       <button class="save-btn" id="saveSettingsBtn"><i class="ti ti-device-floppy"></i>Save</button>
       <div class="hint"><i class="ti ti-lock" style="font-size:12px"></i>API keys stored securely server-side</div>
