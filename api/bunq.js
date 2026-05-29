@@ -3,7 +3,7 @@ import { createSign, generateKeyPairSync } from 'crypto';
 const BUNQ_BASE = 'https://api.bunq.com';
 const KV_URL    = process.env.KV_REST_API_URL;
 const KV_TOKEN  = process.env.KV_REST_API_TOKEN;
-const CTX_KEY   = 'bunq_context_v2'; // bump version to invalidate old cached context
+const CTX_KEY   = 'bunq_context_v3'; // bump version to invalidate old cached context
 const CTX_TTL   = 60 * 60 * 24 * 6; // 6 days in seconds
 
 // ── Upstash REST helpers ──────────────────────────────────────────────────────
@@ -108,9 +108,6 @@ async function getContext(apiKey) {
     || userApiKey?.granted_by_user?.id
     || userApiKey?.id;
 
-  console.log('Bunq session resp keys:', JSON.stringify(resp.map(r => Object.keys(r)[0])));
-  console.log('Bunq userApiKey:', JSON.stringify(userApiKey));
-  console.log('Bunq resolved userId:', realUserId);
 
   const userId = realUserId;
   if (!sessionToken || !userId) throw new Error('Could not extract session token or user ID');
@@ -158,28 +155,51 @@ export default async function handler(req, res) {
     const { sessionToken, userId, privateKey } = await getValidSession(apiKey);
 
     if (action === 'accounts') {
-      const { ok, json, status } = await bunqFetch(`/v1/user/${userId}/monetary-account`, 'GET', null, sessionToken, privateKey);
-      if (!ok) {
-        if (status === 401) await kvDel(CTX_KEY);
-        return res.status(status).json({ error: json?.Error?.[0]?.error_description || 'Failed', expired: status === 401 });
+      // First get all users associated with this API key
+      const usersRes = await bunqFetch('/v1/user', 'GET', null, sessionToken, privateKey);
+      if (!usersRes.ok) {
+        if (usersRes.status === 401) await kvDel(CTX_KEY);
+        return res.status(usersRes.status).json({ error: usersRes.json?.Error?.[0]?.error_description || 'Failed to fetch users', expired: usersRes.status === 401 });
       }
-      console.log('Bunq full response keys:', JSON.stringify((json.Response || []).map(r => ({ type: Object.keys(r)[0], id: Object.values(r)[0]?.id, desc: Object.values(r)[0]?.description, status: Object.values(r)[0]?.status }))));
-      const accounts = (json.Response || [])
-        .map(r => r.MonetaryAccountBank || r.MonetaryAccountSavings || r.MonetaryAccountJoint || r.MonetaryAccountLight || r.MonetaryAccountInvestment || r.MonetaryAccountExternalSavings || r.MonetaryAccount || Object.values(r)[0])
+
+      // Extract all user IDs (personal + business)
+      const users = (usersRes.json.Response || [])
+        .map(r => r.UserPerson || r.UserCompany || r.UserLight || r.UserApiKey)
         .filter(Boolean)
-        // .filter(a => a.status === 'ACTIVE') // temporarily disabled to debug
-        .map(a => ({
-          id: a.id, description: a.description, balance: a.balance,
-          currency: a.currency, status: a.status,
-          iban: a.alias?.find(al => al.type === 'IBAN')?.value,
-        }));
-      return res.status(200).json({ accounts });
+        .map(u => ({ id: u.id, type: u.display_name || u.legal_name || 'User' }));
+
+      console.log('Bunq users found:', JSON.stringify(users.map(u => ({ id: u.id, type: u.type }))));
+
+      // Fetch accounts from ALL users
+      const allAccounts = [];
+      for (const user of users) {
+        const { ok, json } = await bunqFetch(`/v1/user/${user.id}/monetary-account`, 'GET', null, sessionToken, privateKey);
+        if (!ok) continue;
+        const accounts = (json.Response || [])
+          .map(r => r.MonetaryAccountBank || r.MonetaryAccountSavings || r.MonetaryAccountJoint || r.MonetaryAccountLight || r.MonetaryAccountInvestment || r.MonetaryAccountExternalSavings || r.MonetaryAccount || Object.values(r)[0])
+          .filter(Boolean)
+          .filter(a => a.status === 'ACTIVE')
+          .map(a => ({
+            id: a.id,
+            userId: user.id,
+            description: a.description,
+            balance: a.balance,
+            currency: a.currency,
+            status: a.status,
+            iban: a.alias?.find(al => al.type === 'IBAN')?.value,
+          }));
+        allAccounts.push(...accounts);
+      }
+
+      return res.status(200).json({ accounts: allAccounts });
     }
 
     if (action === 'payments') {
       if (!accountId) return res.status(400).json({ error: 'Missing accountId' });
+      // Use the userId passed from the client (per-account), fall back to session userId
+      const paymentUserId = req.query.userId || userId;
       const { ok, json, status } = await bunqFetch(
-        `/v1/user/${userId}/monetary-account/${accountId}/payment?count=50`,
+        `/v1/user/${paymentUserId}/monetary-account/${accountId}/payment?count=50`,
         'GET', null, sessionToken, privateKey
       );
       if (!ok) {
