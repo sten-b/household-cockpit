@@ -258,64 +258,167 @@ function renderTable(elId, rows, months, totalLabel, valCls) {
   </table></div>`;
 }
 
-// ── Tax table ─────────────────────────────────────────────────────────────────
+// ── Tax overview ──────────────────────────────────────────────────────────────
 function renderTaxTable(elId, payments) {
   const el = document.getElementById(elId);
   if (!el) return;
-  const now = new Date(), year = now.getFullYear(), q = Math.ceil((now.getMonth() + 1) / 3);
 
-  // Section 1: Actual payments to Belastingdienst
-  const taxPay  = payments.filter(p => isBelastingdienst(p) && amt(p) < 0);
-  const byMonth = {};
+  const now  = new Date();
+  const year = now.getFullYear();
+  const q    = Math.ceil((now.getMonth() + 1) / 3);
+  const qLabel = `Q${q} ${year}`;
+  const qMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    .slice((q - 1) * 3, q * 3).join('–');
+
+  // ── Gather actuals ──
+  const taxPay = payments.filter(p => isBelastingdienst(p) && amt(p) < 0);
+  const byType = {};
   for (const p of taxPay) {
-    const m = p.created.slice(0, 7), type = detectTaxType(p), v = Math.abs(amt(p));
-    if (!byMonth[m]) byMonth[m] = {};
-    byMonth[m][type] = (byMonth[m][type] || 0) + v;
+    const type = detectTaxType(p);
+    const m    = p.created.slice(0, 7);
+    if (!byType[type]) byType[type] = { total: 0, months: {} };
+    const v = Math.abs(amt(p));
+    byType[type].total += v;
+    byType[type].months[m] = (byType[type].months[m] || 0) + v;
   }
-  const types  = [...new Set(taxPay.map(detectTaxType))].sort();
-  const months = Object.keys(byMonth).sort().reverse();
-  const grand  = taxPay.reduce((s, p) => s + Math.abs(amt(p)), 0);
+  const totalPaid = taxPay.reduce((s, p) => s + Math.abs(amt(p)), 0);
 
-  let html = taxPay.length
-    ? `<p class="table-section-label">Paid to Belastingdienst</p>
-       <div class="table-scroll"><table class="data-table">
-         <thead><tr><th>Period</th>${types.map(t => `<th class="num">${t}</th>`).join('')}<th class="num">Total</th></tr></thead>
-         <tbody>
-           ${months.map(m => {
-             const total = Object.values(byMonth[m]).reduce((s, v) => s + v, 0);
-             return `<tr><td class="bold">${fmtMon(m)}</td>${types.map(t => `<td class="num">${byMonth[m][t] ? fmt(byMonth[m][t]) : '—'}</td>`).join('')}<td class="num neg-val">${fmt(total)}</td></tr>`;
-           }).join('')}
-           <tr class="total-row"><td>Total paid</td>${types.map(t => { const tot = months.reduce((s, m) => s + (byMonth[m][t] || 0), 0); return `<td class="num">${tot ? fmt(tot) : '—'}</td>`; }).join('')}<td class="num neg-val">${fmt(grand)}</td></tr>
-         </tbody>
-       </table></div>`
-    : '<p class="table-empty">No payments to Belastingdienst detected</p>';
-
-  // Section 2: BTW aangifte (quarterly)
+  // ── Projections ──
   const btw = calcBTW(payments, year, q);
-  html += `<p class="table-section-label" style="margin-top:18px">BTW aangifte — Q${q} ${year} (projection)</p>
-  <div class="table-scroll"><table class="data-table">
-    <thead><tr><th>Component</th><th class="num">Amount</th><th class="num">Rate</th></tr></thead>
-    <tbody>
-      <tr><td>Output BTW (revenue, gross incl. 21%)</td><td class="num">${fmt(btw.outputVAT)}</td><td class="num">21%</td></tr>
-      <tr><td>Input BTW (deductible expenses)</td><td class="num">−${fmt(btw.inputVAT)}</td><td class="num">Mixed</td></tr>
-      <tr class="total-row"><td>BTW te betalen</td><td class="num ${btw.due >= 0 ? 'neg-val' : 'pos-val'}">${fmt(btw.due)}</td><td class="num">Net</td></tr>
-    </tbody>
-  </table></div>
-  <p class="table-hint">Assumes gross amounts received are BTW-inclusive at 21%. 9% applied to food/dining, 0% to transport. File quarterly.</p>`;
-
-  // Section 3: VPB projection (yearly)
   const vpb = calcVPB(payments, year);
-  html += `<p class="table-section-label" style="margin-top:18px">VPB — ${year} projection</p>
-  <div class="table-scroll"><table class="data-table">
-    <thead><tr><th>Component</th><th class="num">Amount</th></tr></thead>
+
+  // ── Build projection rows per tax type ──
+  // Each row: type | total paid YTD | next period due | basis explanation
+  const TAX_ROWS = [
+    {
+      type:       'BTW',
+      paid:       byType['BTW']?.total || 0,
+      due:        btw.due,
+      period:     qLabel,
+      frequency:  'Quarterly',
+      basis:      `Output (21% of ${fmt(btw.outputVAT / 0.21 * 1.21)} revenue) minus input VAT on expenses`,
+    },
+    {
+      type:       'VPB',
+      paid:       byType['VPB']?.total || 0,
+      due:        vpb.vpb,
+      period:     `${year} (est.)`,
+      frequency:  'Annual',
+      basis:      `${vpb.mElapsed.toFixed(1)} months annualised → ${fmt(vpb.projected)} profit × ${vpb.projected <= VPB_THR ? '19%' : '19%/25.8%'}`,
+    },
+    {
+      type:       'Loonheffing',
+      paid:       byType['Loonheffing']?.total || 0,
+      due:        null,
+      period:     'Monthly',
+      frequency:  'Monthly',
+      basis:      'Based on payroll — verify with salary administration',
+    },
+    {
+      type:       'Unknown',
+      paid:       byType['Unknown']?.total || 0,
+      due:        null,
+      period:     '—',
+      frequency:  '—',
+      basis:      'Tax type could not be detected from payment description',
+    },
+  ].filter(r => r.paid > 0 || r.due !== null && r.due > 0);
+
+  // ── Summary KPI cards ──
+  const btwDue = btw.due > 0 ? btw.due : 0;
+  const vpbDue = vpb.vpb;
+
+  let html = `
+  <div class="tax-kpi-row">
+    <div class="tax-kpi">
+      <div class="tax-kpi-lbl">Total paid YTD</div>
+      <div class="tax-kpi-val neg-val">${fmt(totalPaid)}</div>
+      <div class="tax-kpi-sub">To Belastingdienst</div>
+    </div>
+    <div class="tax-kpi">
+      <div class="tax-kpi-lbl">BTW due — ${qLabel}</div>
+      <div class="tax-kpi-val ${btwDue > 0 ? 'neg-val' : 'pos-val'}">${fmt(btwDue)}</div>
+      <div class="tax-kpi-sub">${qMonths} · file by end of quarter</div>
+    </div>
+    <div class="tax-kpi">
+      <div class="tax-kpi-lbl">VPB estimate — ${year}</div>
+      <div class="tax-kpi-val neg-val">${fmt(vpbDue)}</div>
+      <div class="tax-kpi-sub">Annual · based on ${vpb.mElapsed.toFixed(1)} months</div>
+    </div>
+  </div>`;
+
+  // ── Main table: one row per tax type ──
+  html += `
+  <div class="table-scroll" style="margin-top:16px">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Tax type</th>
+        <th class="num">Paid YTD</th>
+        <th class="num">Next due</th>
+        <th>Period</th>
+        <th>Frequency</th>
+        <th>Basis</th>
+      </tr>
+    </thead>
     <tbody>
-      <tr><td>YTD profit (${vpb.mElapsed.toFixed(1)} months)</td><td class="num ${vpb.ytdProfit >= 0 ? 'pos-val' : 'neg-val'}">${fmt(vpb.ytdProfit)}</td></tr>
-      <tr><td>Projected annual profit</td><td class="num">${fmt(vpb.projected)}</td></tr>
-      <tr><td>Rate</td><td class="num">${vpb.projected <= VPB_THR ? '19%' : '19% / 25.8%'}</td></tr>
-      <tr class="total-row"><td>Estimated VPB</td><td class="num neg-val">${fmt(vpb.vpb)}</td></tr>
+      ${TAX_ROWS.map(r => `
+      <tr>
+        <td class="bold"><span class="tax-badge">${r.type}</span></td>
+        <td class="num ${r.paid > 0 ? 'neg-val' : 'neu'}">${r.paid > 0 ? fmt(r.paid) : '—'}</td>
+        <td class="num ${r.due > 0 ? 'neg-val' : r.due === null ? 'neu' : 'pos-val'}">${r.due !== null ? fmt(r.due) : '—'}</td>
+        <td>${r.period}</td>
+        <td><span class="freq-tag">${r.frequency}</span></td>
+        <td class="tax-basis">${r.basis}</td>
+      </tr>`).join('')}
+      ${totalPaid > 0 ? `
+      <tr class="total-row">
+        <td>Total</td>
+        <td class="num neg-val">${fmt(totalPaid)}</td>
+        <td class="num neg-val">${fmt(btwDue + vpbDue)}</td>
+        <td colspan="3"></td>
+      </tr>` : ''}
     </tbody>
-  </table></div>
-  <p class="table-hint">Annualised from ${vpb.mElapsed.toFixed(1)} months of data. Filed annually after year end. Always verify with your accountant.</p>`;
+  </table>
+  </div>
+  <p class="table-hint">⚠️ Projections are estimates based on transaction data. Always verify with your accountant before filing.</p>`;
+
+  // ── Monthly paid breakdown (collapsed into a smaller supporting table) ──
+  if (taxPay.length) {
+    const types  = [...new Set(taxPay.map(detectTaxType))].sort();
+    const byMonth = {};
+    for (const p of taxPay) {
+      const m = p.created.slice(0, 7), type = detectTaxType(p);
+      if (!byMonth[m]) byMonth[m] = {};
+      byMonth[m][type] = (byMonth[m][type] || 0) + Math.abs(amt(p));
+    }
+    const months = Object.keys(byMonth).sort().reverse();
+
+    html += `
+    <p class="table-section-label" style="margin-top:20px">Payment history — Belastingdienst</p>
+    <div class="table-scroll">
+    <table class="data-table">
+      <thead><tr><th>Month</th>${types.map(t => `<th class="num">${t}</th>`).join('')}<th class="num">Total</th></tr></thead>
+      <tbody>
+        ${months.map(m => {
+          const total = Object.values(byMonth[m]).reduce((s, v) => s + v, 0);
+          return `<tr>
+            <td class="bold">${fmtMon(m)}</td>
+            ${types.map(t => `<td class="num">${byMonth[m][t] ? fmt(byMonth[m][t]) : '—'}</td>`).join('')}
+            <td class="num neg-val">${fmt(total)}</td>
+          </tr>`;
+        }).join('')}
+        <tr class="total-row">
+          <td>Total</td>
+          ${types.map(t => { const tot = months.reduce((s, m) => s + (byMonth[m][t] || 0), 0); return `<td class="num">${tot ? fmt(tot) : '—'}</td>`; }).join('')}
+          <td class="num neg-val">${fmt(totalPaid)}</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>`;
+  } else {
+    html += '<p class="table-empty" style="margin-top:12px">No payments to Belastingdienst detected yet</p>';
+  }
 
   el.innerHTML = html;
 }
@@ -383,16 +486,6 @@ function renderBusiness(which) {
 
   areaChart(which + 'Area', which + 'AreaChart', months.map(m => m.label), totals.map(t => Math.round(t.net)), '#e7255a');
   groupedBar(which + 'Bar', which + 'BarChart', months.map(m => m.label), totals.map(t => Math.round(t.income)), totals.map(t => Math.round(t.expenses)));
-
-  // BTW coverage indicator — Flii Media only (client-facing BV)
-  if (which === 'flii') {
-    const btwDue  = calcBTW(payments, new Date().getFullYear(), Math.ceil((new Date().getMonth() + 1) / 3)).due;
-    const covered = btwDue > 0 ? Math.min(100, (bal / btwDue) * 100) : 100;
-    document.getElementById('fliiVat').innerHTML = `
-      <div class="vat-row"><span class="vat-label">Projected BTW te betalen this quarter</span><span class="vat-val ${btwDue > 0 ? 'neg-val' : 'pos-val'}">${fmt(btwDue)}</span></div>
-      <div class="vat-bar-bg"><div class="vat-bar" style="width:${covered.toFixed(0)}%"></div></div>
-      <div class="vat-hint">${covered >= 100 ? '✓ Balance covers projected BTW obligation' : `${covered.toFixed(0)}% covered — top up before quarter end`}</div>`;
-  }
 
   renderTaxTable(which + 'TaxTable', payments);
 
