@@ -49,19 +49,45 @@ const paymentsFor = ids => ids.flatMap(id => state.payments[id] || []).sort((a, 
 const amt         = p => parseFloat(p.amount?.value || 0);
 const cpName      = p => p.counterparty?.display_name || p.description || 'Unknown';
 
-// ── Date helpers ──────────────────────────────────────────────────────────────
-function last6Months() {
-  const now = new Date();
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-    return { label: d.toLocaleString('default', { month: 'short' }), start: new Date(d.getFullYear(), d.getMonth(), 1), end: new Date(d.getFullYear(), d.getMonth() + 1, 1) };
+// ── Date range state ──────────────────────────────────────────────────────────
+const DR = {
+  // Default: year to date
+  start: new Date(new Date().getFullYear(), 0, 1),
+  end:   new Date(),
+  preset: 'ytd',
+};
+
+function drMonths() {
+  // Build monthly buckets covering the selected range
+  const months = [];
+  const cursor = new Date(DR.start.getFullYear(), DR.start.getMonth(), 1);
+  const endMon = new Date(DR.end.getFullYear(), DR.end.getMonth(), 1);
+  while (cursor <= endMon) {
+    months.push({
+      label: cursor.toLocaleString('default', { month: 'short' }),
+      start: new Date(cursor),
+      end:   new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1),
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return months;
+}
+
+function drFilter(payments) {
+  return payments.filter(p => {
+    const d = new Date(p.created);
+    return d >= DR.start && d <= DR.end;
   });
 }
 
+// thisMonth() still used for KPI "this month" figures — unaffected by range
 function thisMonth() {
   const now = new Date();
   return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: new Date(now.getFullYear(), now.getMonth() + 1, 1) };
 }
+
+// Backwards-compat alias used in renderSavings
+function last6Months() { return drMonths(); }
 
 function monthlyTotals(payments, months) {
   return months.map(({ start, end }) => {
@@ -455,6 +481,54 @@ document.getElementById('settingsBtn').addEventListener('click', () => {
 overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
 document.getElementById('closeSettingsBtn').addEventListener('click', () => overlay.classList.remove('open'));
 
+// ── Date range ───────────────────────────────────────────────────────────────
+const dateOverlay = document.getElementById('dateOverlay');
+
+function setDateRange(start, end, preset) {
+  DR.start  = start;
+  DR.end    = end;
+  DR.preset = preset;
+  document.querySelectorAll('.dr-preset').forEach(b => b.classList.toggle('active', b.dataset.preset === preset));
+  renderActive();
+}
+
+function presetRange(preset) {
+  const now = new Date();
+  const ranges = {
+    ytd: [new Date(now.getFullYear(), 0, 1),                         new Date()],
+    '3m': [new Date(now.getFullYear(), now.getMonth() - 2, 1),       new Date()],
+    '6m': [new Date(now.getFullYear(), now.getMonth() - 5, 1),       new Date()],
+    '12m':[new Date(now.getFullYear(), now.getMonth() - 11, 1),      new Date()],
+  };
+  if (ranges[preset]) setDateRange(...ranges[preset], preset);
+}
+
+document.querySelectorAll('.dr-preset[data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.preset === 'custom') {
+      // Pre-fill inputs with current range
+      const pad = n => String(n).padStart(2, '0');
+      const toVal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      document.getElementById('drFrom').value = toVal(DR.start);
+      document.getElementById('drTo').value   = toVal(DR.end);
+      dateOverlay.classList.add('open');
+    } else {
+      presetRange(btn.dataset.preset);
+    }
+  });
+});
+
+dateOverlay.addEventListener('click', e => { if (e.target === dateOverlay) dateOverlay.classList.remove('open'); });
+
+document.getElementById('drApplyBtn').addEventListener('click', () => {
+  const from = new Date(document.getElementById('drFrom').value);
+  const to   = new Date(document.getElementById('drTo').value);
+  if (isNaN(from) || isNaN(to) || from > to) return;
+  to.setHours(23, 59, 59);
+  dateOverlay.classList.remove('open');
+  setDateRange(from, to, 'custom');
+});
+
 // ── Refresh ───────────────────────────────────────────────────────────────────
 document.getElementById('refreshBtn').addEventListener('click', async () => {
   const icon = document.querySelector('#refreshBtn i');
@@ -467,8 +541,8 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
 function renderBusiness(which) {
   const ids      = ACCT[which];
   const accs     = byIds(ids);
-  const payments = paymentsFor(ids);
-  const months   = last6Months();
+  const payments = drFilter(paymentsFor(ids));
+  const months   = drMonths();
   const totals   = monthlyTotals(payments, months);
   const { start } = thisMonth();
 
@@ -502,8 +576,8 @@ function renderBusiness(which) {
 
 // ── BUDGET tab ────────────────────────────────────────────────────────────────
 function renderBudget() {
-  const payments = paymentsFor(ACCT.budget);
-  const months   = last6Months();
+  const payments = drFilter(paymentsFor(ACCT.budget));
+  const months   = drMonths();
   const totals   = monthlyTotals(payments, months);
   const accs     = byIds(ACCT.budget);
   const { start } = thisMonth();
@@ -553,12 +627,12 @@ function renderBudget() {
 // ── SAVINGS tab ───────────────────────────────────────────────────────────────
 function renderSavings() {
   const savAccs     = byIds(ACCT.savings);
-  const savPayments = paymentsFor(ACCT.savings);
-  const months      = last6Months();
+  const savPayments = drFilter(paymentsFor(ACCT.savings));
+  const months      = drMonths();
   const totalSaved  = balance(savAccs);
   const { start }   = thisMonth();
 
-  const budgetPay      = paymentsFor(ACCT.budget);
+  const budgetPay      = drFilter(paymentsFor(ACCT.budget));
   const monthlyIncome  = budgetPay.filter(p => new Date(p.created) >= start && amt(p) > 0).reduce((s, p) => s + amt(p), 0);
   const monthlySavings = savPayments.filter(p => new Date(p.created) >= start && amt(p) > 0).reduce((s, p) => s + amt(p), 0);
   const savRate        = monthlyIncome > 0 ? ((monthlySavings / monthlyIncome) * 100).toFixed(1) + '%' : '—';
