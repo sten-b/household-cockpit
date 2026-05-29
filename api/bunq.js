@@ -1,8 +1,8 @@
 import { createSign, generateKeyPairSync } from 'crypto';
 
 const BUNQ_BASE = 'https://api.bunq.com';
-const KV_URL    = process.env.UPSTASH_REDIS_REST_URL;
-const KV_TOKEN  = process.env.UPSTASH_REDIS_REST_TOKEN;
+const KV_URL    = process.env.KV_REST_API_URL;
+const KV_TOKEN  = process.env.KV_REST_API_TOKEN;
 const CTX_KEY   = 'bunq_context';
 const CTX_TTL   = 60 * 60 * 24 * 6; // 6 days in seconds
 
@@ -132,7 +132,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (!KV_URL || !KV_TOKEN) return res.status(500).json({ error: 'UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set' });
+  if (!KV_URL || !KV_TOKEN) return res.status(500).json({ error: 'KV_REST_API_URL or KV_REST_API_TOKEN not set' });
 
   const apiKey = process.env.BUNQ_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'BUNQ_API_KEY environment variable not set' });
