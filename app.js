@@ -123,68 +123,42 @@ const fmt = (n, decimals = 2) => '€' + Number(n).toLocaleString('en-EU', { min
 const fmtSign = n => (n >= 0 ? '+' : '') + fmt(n);
 const fmtDate = d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
-// ── Bunq API ─────────────────────────────────────────────────────────────────
-// Bunq requires a registered device and session. We implement a direct REST flow.
-const BUNQ_BASE = 'https://api.bunq.com';
-
-async function bunqRequest(method, endpoint, body = null, sessionToken = null) {
-  const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'User-Agent': 'HouseholdCockpit/1.0' };
-  if (sessionToken) headers['X-Bunq-Client-Authentication'] = sessionToken;
-  else if (state.bunqKey) headers['X-Bunq-Client-Authentication'] = state.bunqKey;
-  const opts = { method, headers };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(BUNQ_BASE + endpoint, opts);
-  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.Error?.[0]?.error_description || `Bunq ${res.status}`); }
-  return res.json();
+// ── Bunq API — via /api/bunq proxy (handles CORS + auth server-side) ──────────
+async function bunqProxy(action, params = {}) {
+  const qs = new URLSearchParams({ action, ...params }).toString();
+  const res = await fetch(`/api/bunq?${qs}`, {
+    headers: { 'X-Bunq-Api-Key': state.bunqKey }
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || `Proxy error ${res.status}`);
+  return json;
 }
 
 async function loadBunq() {
   if (!state.bunqKey) { setConnDot('bunqDot', 'bunqLabel', 'red'); return; }
   try {
-    // 1. Installation (get server public key)
-    let installToken;
-    try {
-      const inst = await bunqRequest('POST', '/v1/installation', { client_public_key: 'placeholder' });
-      installToken = inst.Response?.find(r => r.Token)?.Token?.token;
-    } catch (e) {
-      // Installation may already exist, continue
-    }
-
-    // 2. Device registration
-    try {
-      await bunqRequest('POST', '/v1/device-server', {
-        description: 'Household Cockpit',
-        secret: state.bunqKey,
-        permitted_ips: ['*']
-      });
-    } catch (e) { /* device may already be registered */ }
-
-    // 3. Session
-    const sessRes = await bunqRequest('POST', '/v1/session-server', { secret: state.bunqKey });
-    const sessToken = sessRes.Response?.find(r => r.Token)?.Token?.token;
-    const userId = sessRes.Response?.find(r => r.UserPerson || r.UserCompany);
-    const uid = userId?.UserPerson?.id || userId?.UserCompany?.id;
-
-    if (!sessToken || !uid) throw new Error('Could not establish session');
-
-    // 4. Accounts
-    const accsRes = await bunqRequest('GET', `/v1/user/${uid}/monetary-account`, null, sessToken);
-    const accounts = accsRes.Response?.map(r => r.MonetaryAccountBank || r.MonetaryAccount).filter(Boolean) || [];
+    // 1. Fetch accounts via proxy
+    const { accounts } = await bunqProxy('accounts');
     state.bunqAccounts = accounts;
 
-    // 5. Total balance
+    // 2. Sum balances
     let total = 0;
     for (const acc of accounts) {
       if (acc.balance) total += parseFloat(acc.balance.value || 0);
     }
 
-    // 6. Payments (transactions) from first account
-    if (accounts.length > 0) {
-      const pmtsRes = await bunqRequest('GET', `/v1/user/${uid}/monetary-account/${accounts[0].id}/payment?count=50`, null, sessToken);
-      state.bunqPayments = pmtsRes.Response?.map(r => r.Payment).filter(Boolean) || [];
+    // 3. Fetch payments from all active accounts
+    state.bunqPayments = [];
+    for (const acc of accounts.filter(a => a.status === 'ACTIVE').slice(0, 3)) {
+      try {
+        const { payments } = await bunqProxy('payments', { accountId: acc.id });
+        state.bunqPayments.push(...payments);
+      } catch (e) { console.warn('Payments error for account', acc.id, e.message); }
     }
+    // Sort by date descending
+    state.bunqPayments.sort((a, b) => new Date(b.created) - new Date(a.created));
 
-    // Update UI
+    // 4. Update UI
     document.getElementById('bunqBalance').textContent = fmt(total);
     const monthlyChange = calcMonthlyChange(state.bunqPayments);
     const sub = document.getElementById('bunqSub');
