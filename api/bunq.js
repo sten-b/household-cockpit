@@ -108,10 +108,10 @@ async function getContext(apiKey) {
     || userApiKey?.granted_by_user?.id
     || userApiKey?.id;
 
-
   const userId = realUserId;
   if (!sessionToken || !userId) throw new Error('Could not extract session token or user ID');
 
+  // Note: privateKey stored in Upstash — acceptable for a personal single-user app.
   const ctx = { privateKey, installToken, sessionToken, userId, createdAt: Date.now() };
   await kvSet(CTX_KEY, ctx, CTX_TTL);
   console.log('Bunq context saved to Upstash');
@@ -168,12 +168,11 @@ export default async function handler(req, res) {
         .filter(Boolean)
         .map(u => ({ id: u.id, type: u.display_name || u.legal_name || 'User' }));
 
-      console.log('Bunq users found:', JSON.stringify(users.map(u => ({ id: u.id, type: u.type }))));
 
       // Fetch accounts from ALL users
       const allAccounts = [];
       for (const user of users) {
-        const { ok, json } = await bunqFetch(`/v1/user/${user.id}/monetary-account?count=25`, 'GET', null, sessionToken, privateKey);
+        const { ok, json } = await bunqFetch(`/v1/user/${user.id}/monetary-account?count=50`, 'GET', null, sessionToken, privateKey);
         if (!ok) continue;
         const accounts = (json.Response || [])
           .map(r => r.MonetaryAccountBank || r.MonetaryAccountSavings || r.MonetaryAccountJoint || r.MonetaryAccountLight || r.MonetaryAccountInvestment || r.MonetaryAccountExternalSavings || r.MonetaryAccount || Object.values(r)[0])
@@ -213,11 +212,6 @@ export default async function handler(req, res) {
           description: p.description, type: p.type, counterparty: p.counterparty_alias,
         }));
       return res.status(200).json({ payments });
-    }
-
-    if (action === 'debug') {
-      const usersRes = await bunqFetch('/v1/user', 'GET', null, sessionToken, privateKey);
-      return res.status(200).json({ raw: usersRes.json });
     }
 
     return res.status(400).json({ error: `Unknown action: ${action}` });
