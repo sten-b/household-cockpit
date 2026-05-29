@@ -18,205 +18,150 @@
 <body>
 <div id="app">
 
-  <!-- Top bar -->
   <header class="topbar">
     <div class="topbar-left">
-      <h1>Household Cockpit</h1>
-      <div class="meta" id="connStatus">
-        <span class="conn"><span class="dot red" id="bunqDot"></span><span id="bunqLabel">Bunq</span></span>
+      <h1>Cockpit</h1>
+      <div class="meta">
+        <span class="conn"><span class="dot amber" id="bunqDot"></span><span id="bunqLabel">Bunq</span></span>
         <span class="conn"><span class="dot amber" id="alpacaDot"></span><span id="alpacaLabel">Alpaca</span></span>
       </div>
     </div>
     <div class="topbar-right">
-      <button class="icon-btn" id="refreshBtn" title="Refresh data" aria-label="Refresh">
-        <i class="ti ti-refresh"></i>
-      </button>
-      <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
-        <i class="ti ti-settings"></i>
-      </button>
+      <button class="icon-btn" id="refreshBtn" aria-label="Refresh"><i class="ti ti-refresh"></i></button>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings"><i class="ti ti-settings"></i></button>
     </div>
   </header>
 
-  <!-- Pages -->
   <main class="scroll-area">
 
-    <!-- Overview page -->
-    <div class="page active" id="page-overview">
-      <div class="metric-grid">
-        <div class="metric">
-          <div class="metric-lbl"><i class="ti ti-building-bank"></i>Bank (Bunq)</div>
-          <div class="metric-val" id="bunqBalance">—</div>
-          <div class="metric-sub" id="bunqSub">Not connected</div>
-        </div>
-        <div class="metric">
-          <div class="metric-lbl"><i class="ti ti-chart-line"></i>Portfolio</div>
-          <div class="metric-val" id="alpacaValue">—</div>
-          <div class="metric-sub" id="alpacaSub">Not connected</div>
-        </div>
-        <div class="metric full">
-          <div class="metric-lbl"><i class="ti ti-wallet"></i>Total net worth</div>
-          <div class="metric-val" id="netWorth">—</div>
-          <div class="metric-sub" id="netWorthSub">&nbsp;</div>
-        </div>
-      </div>
-
+    <!-- ── FLII MEDIA ── -->
+    <div class="page active" id="page-flii">
+      <div class="kpi-row" id="flii-kpis"></div>
       <div class="card">
-        <div class="card-head">
-          <span class="card-title"><i class="ti ti-chart-bar"></i>Monthly spending</span>
-          <span class="card-btn" id="spendPeriod">Last 5 months</span>
-        </div>
-        <div class="legend">
-          <span class="li"><span class="ld" style="background:#e7255a"></span>Housing</span>
-          <span class="li"><span class="ld" style="background:#f05a84"></span>Groceries</span>
-          <span class="li"><span class="ld" style="background:#f78faa"></span>Dining</span>
-          <span class="li"><span class="ld" style="background:#fbc4d4"></span>Transport</span>
-          <span class="li"><span class="ld" style="background:#ccc9c1"></span>Other</span>
-        </div>
-        <div class="chart-wrap" style="height:200px">
-          <canvas id="spendChart" role="img" aria-label="Monthly spending by category"></canvas>
-        </div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-trending-up"></i>Cashflow trend</span><span class="card-hint">6 months</span></div>
+        <div class="cw" style="height:180px"><canvas id="fliiAreaChart"></canvas></div>
       </div>
-
       <div class="card">
-        <div class="card-head">
-          <span class="card-title"><i class="ti ti-receipt-2"></i>Budget vs actual</span>
-        </div>
-        <div class="chart-wrap" style="height:200px">
-          <canvas id="budgetChart" role="img" aria-label="Budget vs actual spend"></canvas>
-        </div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar"></i>Revenue vs expenses</span><span class="card-hint">Monthly</span></div>
+        <div class="cw" style="height:180px"><canvas id="fliiBarChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-receipt-tax"></i>VAT reserve (21%)</span></div>
+        <div id="fliiVat"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-list"></i>Transactions</span><span class="card-hint" id="fliiTxCount"></span></div>
+        <div class="tx-list" id="fliiTxList"></div>
       </div>
     </div>
 
-    <!-- Transactions page -->
-    <div class="page" id="page-transactions">
+    <!-- ── SB HOLDING ── -->
+    <div class="page" id="page-holding">
+      <div class="kpi-row" id="holding-kpis"></div>
       <div class="card">
-        <div class="card-head">
-          <span class="card-title"><i class="ti ti-list"></i>Recent transactions</span>
-          <button class="card-btn" id="loadMoreBtn">Load more</button>
-        </div>
-        <div class="txl" id="txList">
-          <div class="loading"><div class="spinner"></div>Loading transactions…</div>
-        </div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-trending-up"></i>Cashflow trend</span><span class="card-hint">6 months</span></div>
+        <div class="cw" style="height:180px"><canvas id="holdingAreaChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar"></i>Revenue vs expenses</span><span class="card-hint">Monthly</span></div>
+        <div class="cw" style="height:180px"><canvas id="holdingBarChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-list"></i>Transactions</span><span class="card-hint" id="holdingTxCount"></span></div>
+        <div class="tx-list" id="holdingTxList"></div>
       </div>
     </div>
 
-    <!-- Goals page -->
-    <div class="page" id="page-goals">
+    <!-- ── BUDGET & PAYMENTS ── -->
+    <div class="page" id="page-budget">
+      <div class="kpi-row" id="budget-kpis"></div>
       <div class="card">
-        <div class="card-head">
-          <span class="card-title"><i class="ti ti-target"></i>Savings goals</span>
-          <button class="card-btn" id="addGoalBtn">+ Add goal</button>
-        </div>
-        <div class="goals" id="goalsList"></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-arrows-exchange"></i>Income vs expenses</span><span class="card-hint">This month</span></div>
+        <div class="cw" style="height:160px"><canvas id="budgetFlowChart"></canvas></div>
       </div>
-
       <div class="card">
-        <div class="card-head">
-          <span class="card-title"><i class="ti ti-plane"></i>Holiday planning</span>
-          <button class="card-btn" id="addHolidayBtn">+ Add trip</button>
-        </div>
-        <div class="goals" id="holidayList"></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar"></i>Spending by category</span><span class="card-hint">This month</span></div>
+        <div class="cw" style="height:220px"><canvas id="budgetCatChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-repeat"></i>Recurring payments</span></div>
+        <div id="recurringList"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-list"></i>Recent transactions</span></div>
+        <div class="tx-list" id="budgetTxList"></div>
       </div>
     </div>
 
-    <!-- Investments page -->
+    <!-- ── SAVINGS & GOALS ── -->
+    <div class="page" id="page-savings">
+      <div class="kpi-row" id="savings-kpis"></div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-trending-up"></i>Savings trend</span><span class="card-hint">6 months</span></div>
+        <div class="cw" style="height:180px"><canvas id="savingsAreaChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title"><i class="ti ti-target"></i>Goals</span>
+          <button class="card-btn" id="addGoalBtn">+ Add</button>
+        </div>
+        <div id="goalsList"><p class="empty-msg">No goals yet — tap + Add to create one</p></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title"><i class="ti ti-plane"></i>Holidays</span>
+          <button class="card-btn" id="addHolidayBtn">+ Add</button>
+        </div>
+        <div id="holidayList"><p class="empty-msg">No trips yet — tap + Add to create one</p></div>
+      </div>
+    </div>
+
+    <!-- ── INVESTMENTS ── -->
     <div class="page" id="page-investments">
-      <div class="metric-grid">
-        <div class="metric">
-          <div class="metric-lbl"><i class="ti ti-trending-up"></i>Portfolio value</div>
-          <div class="metric-val" id="portfolioVal">—</div>
-          <div class="metric-sub" id="portfolioSub">&nbsp;</div>
-        </div>
-        <div class="metric">
-          <div class="metric-lbl"><i class="ti ti-currency-euro"></i>Today's P&L</div>
-          <div class="metric-val" id="todayPL">—</div>
-          <div class="metric-sub" id="todayPLSub">&nbsp;</div>
-        </div>
-      </div>
-
+      <div class="kpi-row" id="invest-kpis"></div>
       <div class="card">
-        <div class="card-head">
-          <span class="card-title"><i class="ti ti-chart-donut"></i>Allocation</span>
-        </div>
-        <div class="chart-wrap" style="height:160px; margin-bottom:16px">
-          <canvas id="portfolioChart" role="img" aria-label="Portfolio allocation donut chart"></canvas>
-        </div>
-        <div class="inv-rows" id="invRows">
-          <div class="loading"><div class="spinner"></div>Loading portfolio…</div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-donut"></i>Allocation</span></div>
+        <div style="display:flex;gap:16px;align-items:center">
+          <div class="cw" style="height:160px;flex:1"><canvas id="allocChart"></canvas></div>
+          <div id="allocLegend" style="flex:1"></div>
         </div>
       </div>
-    </div>
-
-    <!-- AI Insights page -->
-    <div class="page" id="page-ai">
       <div class="card">
-        <div class="card-head">
-          <span class="card-title"><i class="ti ti-sparkles"></i>AI spending insights</span>
-        </div>
-        <div class="ai-list" id="aiList">
-          <div class="loading"><div class="spinner"></div>Ready to analyse…</div>
-        </div>
-        <button class="analyze-btn" id="analyzeBtn">
-          <i class="ti ti-brain"></i>Analyse my spending
-        </button>
-      </div>
-      <div class="last-updated" id="aiUpdated" style="display:none">
-        <i class="ti ti-clock"></i><span id="aiUpdatedText"></span>
+        <div class="card-head"><span class="card-title"><i class="ti ti-list"></i>Positions</span></div>
+        <div id="positionsList"></div>
       </div>
     </div>
 
   </main>
 
-  <!-- Bottom nav -->
   <nav class="bottom-nav">
-    <button class="nav-item active" data-page="overview">
-      <i class="ti ti-home"></i><span>Overview</span>
-    </button>
-    <button class="nav-item" data-page="transactions">
-      <i class="ti ti-arrows-exchange"></i><span>Transactions</span>
-    </button>
-    <button class="nav-item" data-page="goals">
-      <i class="ti ti-target"></i><span>Goals</span>
-    </button>
-    <button class="nav-item" data-page="investments">
-      <i class="ti ti-chart-line"></i><span>Investments</span>
-    </button>
-    <button class="nav-item" data-page="ai">
-      <i class="ti ti-sparkles"></i><span>AI</span>
-    </button>
+    <button class="nav-item active" data-page="flii"><i class="ti ti-building"></i><span>Flii Media</span></button>
+    <button class="nav-item" data-page="holding"><i class="ti ti-briefcase"></i><span>SB Holding</span></button>
+    <button class="nav-item" data-page="budget"><i class="ti ti-wallet"></i><span>Budget</span></button>
+    <button class="nav-item" data-page="savings"><i class="ti ti-target"></i><span>Savings</span></button>
+    <button class="nav-item" data-page="investments"><i class="ti ti-chart-line"></i><span>Investments</span></button>
   </nav>
 
   <!-- Settings sheet -->
   <div class="settings-overlay" id="settingsOverlay">
     <div class="settings-sheet">
       <div class="sheet-handle"></div>
-      <div class="sheet-title"><i class="ti ti-adjustments"></i>Budget settings</div>
-
-      <div class="section-sep">Monthly budgets</div>
+      <div class="sheet-title"><i class="ti ti-adjustments"></i>Settings</div>
+      <div class="section-sep">Account mapping</div>
+      <p class="hint-text">Map your Bunq accounts to the right tabs. Enter the account description exactly as it appears in Bunq.</p>
       <div class="field">
-        <label><i class="ti ti-home"></i>Housing (€)</label>
-        <input type="number" id="budgetHousing" placeholder="950">
+        <label><i class="ti ti-building"></i>Flii Media account name</label>
+        <input type="text" id="settingFlii" placeholder="Flii Media">
       </div>
       <div class="field">
-        <label><i class="ti ti-shopping-cart"></i>Groceries (€)</label>
-        <input type="number" id="budgetGroceries" placeholder="300">
+        <label><i class="ti ti-briefcase"></i>SB Holding account name</label>
+        <input type="text" id="settingHolding" placeholder="SB Holding">
       </div>
       <div class="field">
-        <label><i class="ti ti-tool-kitchen-2"></i>Dining (€)</label>
-        <input type="number" id="budgetDining" placeholder="200">
+        <label><i class="ti ti-plane"></i>Savings account name(s)</label>
+        <input type="text" id="settingSavings" placeholder="e.g. Bruiloft, Vakantie">
       </div>
-      <div class="field">
-        <label><i class="ti ti-car"></i>Transport (€)</label>
-        <input type="number" id="budgetTransport" placeholder="150">
-      </div>
-      <div class="field">
-        <label><i class="ti ti-device-mobile"></i>Subscriptions (€)</label>
-        <input type="number" id="budgetSubscriptions" placeholder="150">
-      </div>
-
-      <button class="save-btn" id="saveSettingsBtn">
-        <i class="ti ti-device-floppy"></i>Save budgets
-      </button>
+      <button class="save-btn" id="saveSettingsBtn"><i class="ti ti-device-floppy"></i>Save</button>
       <div class="hint"><i class="ti ti-lock" style="font-size:12px"></i>API keys stored securely server-side</div>
     </div>
   </div>
