@@ -195,23 +195,45 @@ export default async function handler(req, res) {
 
     if (action === 'payments') {
       if (!accountId) return res.status(400).json({ error: 'Missing accountId' });
-      // Use the userId passed from the client (per-account), fall back to session userId
       const paymentUserId = req.query.userId || userId;
-      const { ok, json, status } = await bunqFetch(
-        `/v1/user/${paymentUserId}/monetary-account/${accountId}/payment?count=50`,
-        'GET', null, sessionToken, privateKey
-      );
-      if (!ok) {
-        if (status === 401) await kvDel(CTX_KEY);
-        return res.status(status).json({ error: json?.Error?.[0]?.error_description || 'Failed', expired: status === 401 });
+
+      // Paginate through up to 12 months of history (max 200 per page)
+      const cutoff   = new Date();
+      cutoff.setMonth(cutoff.getMonth() - 12);
+      const allPayments = [];
+      let endpoint = `/v1/user/${paymentUserId}/monetary-account/${accountId}/payment?count=200`;
+      let pages = 0;
+      const MAX_PAGES = 10; // safety cap: 10 × 200 = 2000 payments max
+
+      while (endpoint && pages < MAX_PAGES) {
+        const { ok, json, status } = await bunqFetch(endpoint, 'GET', null, sessionToken, privateKey);
+        if (!ok) {
+          if (status === 401) await kvDel(CTX_KEY);
+          return res.status(status).json({ error: json?.Error?.[0]?.error_description || 'Failed', expired: status === 401 });
+        }
+
+        const page = (json.Response || []).map(r => r.Payment).filter(Boolean);
+        if (!page.length) break;
+
+        // Map to our slim payment shape
+        for (const p of page) {
+          allPayments.push({
+            id: p.id, created: p.created, amount: p.amount,
+            description: p.description, type: p.type, counterparty: p.counterparty_alias,
+          });
+        }
+
+        // Stop if the oldest payment on this page is older than our cutoff
+        const oldest = new Date(page[page.length - 1].created);
+        if (oldest < cutoff) break;
+
+        // Follow older_url for next page
+        const pagination = json.Pagination;
+        endpoint = pagination?.older_url ? pagination.older_url.replace('https://api.bunq.com', '') : null;
+        pages++;
       }
-      const payments = (json.Response || [])
-        .map(r => r.Payment).filter(Boolean)
-        .map(p => ({
-          id: p.id, created: p.created, amount: p.amount,
-          description: p.description, type: p.type, counterparty: p.counterparty_alias,
-        }));
-      return res.status(200).json({ payments });
+
+      return res.status(200).json({ payments: allPayments });
     }
 
     return res.status(400).json({ error: `Unknown action: ${action}` });
