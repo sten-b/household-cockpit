@@ -3,7 +3,7 @@ import { createSign, generateKeyPairSync } from 'crypto';
 const BUNQ_BASE = 'https://api.bunq.com';
 const KV_URL    = process.env.KV_REST_API_URL;
 const KV_TOKEN  = process.env.KV_REST_API_TOKEN;
-const CTX_KEY   = 'bunq_context_v3'; // bump version to invalidate old cached context
+const CTX_KEY   = 'bunq_context_v6'; // bump version to invalidate old cached context
 const CTX_TTL   = 60 * 60 * 24 * 6; // 6 days in seconds
 
 // ── Upstash REST helpers ──────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ export default async function handler(req, res) {
       // Fetch accounts from ALL users
       const allAccounts = [];
       for (const user of users) {
-        const { ok, json } = await bunqFetch(`/v1/user/${user.id}/monetary-account`, 'GET', null, sessionToken, privateKey);
+        const { ok, json } = await bunqFetch(`/v1/user/${user.id}/monetary-account?count=25`, 'GET', null, sessionToken, privateKey);
         if (!ok) continue;
         const accounts = (json.Response || [])
           .map(r => r.MonetaryAccountBank || r.MonetaryAccountSavings || r.MonetaryAccountJoint || r.MonetaryAccountLight || r.MonetaryAccountInvestment || r.MonetaryAccountExternalSavings || r.MonetaryAccount || Object.values(r)[0])
@@ -213,6 +213,11 @@ export default async function handler(req, res) {
           description: p.description, type: p.type, counterparty: p.counterparty_alias,
         }));
       return res.status(200).json({ payments });
+    }
+
+    if (action === 'debug') {
+      const usersRes = await bunqFetch('/v1/user', 'GET', null, sessionToken, privateKey);
+      return res.status(200).json({ raw: usersRes.json });
     }
 
     return res.status(400).json({ error: `Unknown action: ${action}` });
