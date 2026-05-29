@@ -1,10 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "",
   "outputDirectory": "public",
-  "functions": {
-    "api/bunq.js": { "runtime": "nodejs20.x" }
-  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/((?!api).*)", "destination": "/index.html" }
