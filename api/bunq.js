@@ -3,7 +3,7 @@ import { createSign, generateKeyPairSync } from 'crypto';
 const BUNQ_BASE = 'https://api.bunq.com';
 const KV_URL    = process.env.KV_REST_API_URL;
 const KV_TOKEN  = process.env.KV_REST_API_TOKEN;
-const CTX_KEY   = 'bunq_context';
+const CTX_KEY   = 'bunq_context_v2'; // bump version to invalidate old cached context
 const CTX_TTL   = 60 * 60 * 24 * 6; // 6 days in seconds
 
 // ── Upstash REST helpers ──────────────────────────────────────────────────────
@@ -95,9 +95,24 @@ async function getContext(apiKey) {
 
   const resp         = sessRes.json.Response || [];
   const sessionToken = resp.find(r => r.Token)?.Token?.token;
-  const userObj      = resp.find(r => r.UserPerson || r.UserCompany || r.UserApiKey);
-  const user         = userObj?.UserPerson || userObj?.UserCompany || userObj?.UserApiKey;
-  const userId       = user?.id;
+
+  // Bunq returns UserApiKey which contains a reference to the real user.
+  // The real user ID is what we need for monetary-account calls.
+  const userApiKey   = resp.find(r => r.UserApiKey)?.UserApiKey;
+  const userPerson   = resp.find(r => r.UserPerson)?.UserPerson;
+  const userCompany  = resp.find(r => r.UserCompany)?.UserCompany;
+
+  // UserApiKey has a granted_by_user object with the real user ID
+  const realUserId   = userPerson?.id
+    || userCompany?.id
+    || userApiKey?.granted_by_user?.id
+    || userApiKey?.id;
+
+  console.log('Bunq session resp keys:', JSON.stringify(resp.map(r => Object.keys(r)[0])));
+  console.log('Bunq userApiKey:', JSON.stringify(userApiKey));
+  console.log('Bunq resolved userId:', realUserId);
+
+  const userId = realUserId;
   if (!sessionToken || !userId) throw new Error('Could not extract session token or user ID');
 
   const ctx = { privateKey, installToken, sessionToken, userId, createdAt: Date.now() };
