@@ -118,7 +118,7 @@ async function loadBunq() {
     state.bunqPayments = [];
     for (const acc of accounts) {
       try {
-        const { payments } = await bunqProxy('payments', { accountId: acc.id });
+        const { payments } = await bunqProxy('payments', { accountId: acc.id, userId: acc.userId });
         state.bunqPayments.push(...payments);
       } catch (e) { console.warn('Payments error', acc.id, e.message); }
     }
