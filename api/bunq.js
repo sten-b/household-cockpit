@@ -3,7 +3,7 @@ import { createSign, generateKeyPairSync } from 'crypto';
 const BUNQ_BASE = 'https://api.bunq.com';
 const KV_URL    = process.env.KV_REST_API_URL;
 const KV_TOKEN  = process.env.KV_REST_API_TOKEN;
-const CTX_KEY   = 'bunq_context_v6'; // bump version to invalidate old cached context
+const CTX_KEY   = 'bunq_context_v7'; // bump version to invalidate old cached context
 const CTX_TTL   = 60 * 60 * 24 * 6; // 6 days in seconds
 
 // ── Upstash REST helpers ──────────────────────────────────────────────────────
@@ -17,12 +17,15 @@ async function kvGet(key) {
 }
 
 async function kvSet(key, value, ttl = null) {
-  // Use POST with JSON body to avoid URL length limits on large payloads
-  const url = ttl ? `${KV_URL}/set/${key}?ex=${ttl}` : `${KV_URL}/set/${key}`;
-  await fetch(url, {
+  // Upstash REST pipeline — handles large payloads reliably
+  const serialised = JSON.stringify(value);
+  const commands = ttl
+    ? [['SET', key, serialised, 'EX', ttl]]
+    : [['SET', key, serialised]];
+  await fetch(`${KV_URL}/pipeline`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(JSON.stringify(value)),
+    body: JSON.stringify(commands),
   });
 }
 

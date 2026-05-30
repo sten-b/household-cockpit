@@ -42,7 +42,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 
 /* ── Bottom nav ── */
 .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--sur); border-top: 0.5px solid var(--bd); padding: 6px 0 calc(var(--safe-bottom) + 6px); display: flex; z-index: 100; }
-.nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; background: none; border: none; cursor: pointer; color: var(--t3); font-size: 9px; font-family: inherit; transition: color .15s; white-space: nowrap; }
+.nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; background: none; border: none; cursor: pointer; color: var(--t3); font-size: 10px; font-family: inherit; transition: color .15s; white-space: nowrap; }
 .nav-item i { font-size: 20px; }
 .nav-item.active { color: var(--m1); }
 
@@ -121,7 +121,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 
 /* ── Data tables ── */
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 300px; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .data-table th { font-size: 10px; font-weight: 600; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; text-align: left; padding: 0 10px 8px 0; border-bottom: 0.5px solid var(--bd2); white-space: nowrap; }
 .data-table th.num { text-align: right; }
 .data-table th:last-child, .data-table td:last-child { padding-right: 0; }
@@ -168,7 +168,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 .tax-kpi-sub { font-size: 10px; color: var(--t3); line-height: 1.4; }
 .tax-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: var(--m5); color: var(--md); white-space: nowrap; }
 .freq-tag { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #f0ede6; color: var(--t2); white-space: nowrap; }
-.tax-basis { font-size: 11px; color: var(--t3); line-height: 1.4; max-width: 200px; }
+.tax-basis { font-size: 11px; color: var(--t3); line-height: 1.4; }
 
 /* ── Date range selector ── */
 .topbar-right { display: flex; align-items: center; gap: 8px; }
@@ -189,3 +189,55 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 .fv-lbl { font-size: 10px; font-weight: 600; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
 .fv-val { font-size: 15px; font-weight: 500; }
 .fv-div { width: 0.5px; background: var(--bd); }
+
+/* ── Responsive ── */
+
+/* Narrow phones (< 380px): simplify topbar */
+@media (max-width: 379px) {
+  .dr-preset:not(.active):not([data-preset="custom"]) { display: none; }
+  .dr-preset.active { min-width: 40px; justify-content: center; }
+  .topbar h1 { font-size: 15px; }
+  .meta { display: none; }
+  .kpi-val { font-size: 19px; }
+  .tax-kpi-row { grid-template-columns: 1fr 1fr; }
+  .tax-kpi-row .tax-kpi:last-child { grid-column: span 2; }
+}
+
+/* Tablet (>= 640px): wider layouts */
+@media (min-width: 640px) {
+  .scroll-area { padding: 20px 20px calc(var(--safe-bottom) + 76px); }
+  .kpi-row { grid-template-columns: repeat(4, 1fr); }
+  .kpi.full { grid-column: span 4; }
+  .tax-kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .nav-item { font-size: 11px; }
+  .nav-item i { font-size: 22px; }
+  .card { padding: 18px; }
+  .data-table { font-size: 13px; }
+  .tx-name { font-size: 13px; }
+}
+
+/* Desktop (>= 960px): constrain width, side padding */
+@media (min-width: 960px) {
+  #app { max-width: 860px; margin: 0 auto; }
+  .topbar { border-radius: 0; }
+  .bottom-nav { max-width: 860px; left: 50%; transform: translateX(-50%); border-radius: 0; }
+  .scroll-area { padding: 24px 24px calc(var(--safe-bottom) + 80px); }
+  .kpi-val { font-size: 24px; }
+}
+
+/* Large desktop (>= 1200px) */
+@media (min-width: 1200px) {
+  #app { max-width: 1000px; }
+  .bottom-nav { max-width: 1000px; }
+}
+
+/* ── Donut layout ── */
+.donut-row { display: flex; gap: 16px; align-items: center; }
+.donut-chart { flex: 0 0 150px; }
+.donut-legend { flex: 1; min-width: 0; }
+
+@media (max-width: 379px) {
+  .donut-row { flex-direction: column; align-items: stretch; }
+  .donut-chart { flex: none; }
+  .donut-legend { display: grid; grid-template-columns: 1fr 1fr; }
+}
