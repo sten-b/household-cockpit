@@ -26,9 +26,16 @@
         <span class="conn"><span class="dot amber" id="alpacaDot"></span><span id="alpacaLabel">Alpaca</span></span>
       </div>
     </div>
+    <div class="date-range-wrap">
+      <button class="dr-preset active" data-preset="ytd">YTD</button>
+      <button class="dr-preset" data-preset="3m">3M</button>
+      <button class="dr-preset" data-preset="6m">6M</button>
+      <button class="dr-preset" data-preset="12m">12M</button>
+      <button class="dr-preset" data-preset="custom" id="drCustomBtn"><i class="ti ti-calendar-event" aria-hidden="true"></i></button>
+    </div>
     <div class="topbar-right">
-      <button class="icon-btn" id="refreshBtn" aria-label="Refresh"><i class="ti ti-refresh" aria-hidden="true"></i></button>
-      <button class="icon-btn" id="settingsBtn" aria-label="Settings"><i class="ti ti-settings" aria-hidden="true"></i></button>
+      <button class="icon-btn" id="refreshBtn" aria-label="Refresh"><i class="ti ti-refresh"></i></button>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings"><i class="ti ti-settings"></i></button>
     </div>
   </header>
 
@@ -38,23 +45,35 @@
     <div class="page active" id="page-flii">
       <div class="kpi-row" id="flii-kpis"></div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-trending-up" aria-hidden="true"></i>Cashflow trend</span><span class="card-hint">6 months</span></div>
-        <div class="cw" style="height:180px"><canvas id="fliiAreaChart"></canvas></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-trending-up" aria-hidden="true"></i>Net cashflow</span><span class="card-hint">Monthly</span></div>
+        <div class="cw" style="height:160px"><canvas id="fliiAreaChart"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>Revenue vs expenses</span><span class="card-hint">Monthly</span></div>
-        <div class="cw" style="height:180px"><canvas id="fliiBarChart"></canvas></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>Revenue vs expenses</span></div>
+        <div class="cw" style="height:160px"><canvas id="fliiBarChart"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-receipt-tax" aria-hidden="true"></i>Tax overview</span></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-donut" aria-hidden="true"></i>Revenue by client</span></div>
+        <div id="fliiConcWarn"></div>
+        <div style="display:flex;gap:16px;align-items:center;margin-top:4px">
+          <div class="cw" style="height:140px;flex:1"><canvas id="fliiConcChart"></canvas></div>
+          <div id="fliiConcLegend" style="flex:1"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>Expenses by category</span></div>
+        <div class="cw"><canvas id="fliiExpCatChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-receipt-tax" aria-hidden="true"></i>Tax</span></div>
         <div id="fliiTaxTable"></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-users" aria-hidden="true"></i>Income per client</span></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-users" aria-hidden="true"></i>Income by client</span></div>
         <div id="fliiClientTable"></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-building-store" aria-hidden="true"></i>Expenditure per provider</span></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-building-store" aria-hidden="true"></i>Expenses by provider</span></div>
         <div id="fliiProviderTable"></div>
       </div>
       <div class="card">
@@ -67,15 +86,19 @@
     <div class="page" id="page-holding">
       <div class="kpi-row" id="holding-kpis"></div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-trending-up" aria-hidden="true"></i>Cashflow trend</span><span class="card-hint">6 months</span></div>
-        <div class="cw" style="height:180px"><canvas id="holdingAreaChart"></canvas></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-trending-up" aria-hidden="true"></i>Balance over time</span></div>
+        <div class="cw" style="height:160px"><canvas id="holdingBalChart"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>Revenue vs expenses</span><span class="card-hint">Monthly</span></div>
-        <div class="cw" style="height:180px"><canvas id="holdingBarChart"></canvas></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>Cash in vs out</span></div>
+        <div class="cw" style="height:160px"><canvas id="holdingBarChart"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-receipt-tax" aria-hidden="true"></i>Tax overview</span></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-arrows-exchange" aria-hidden="true"></i>Intercompany flows</span></div>
+        <div id="holdingIntercompany"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-receipt-tax" aria-hidden="true"></i>Tax</span></div>
         <div id="holdingTaxTable"></div>
       </div>
       <div class="card">
@@ -84,57 +107,60 @@
       </div>
     </div>
 
-    <!-- ── BUDGET & PAYMENTS ── -->
+    <!-- ── BUDGET ── -->
     <div class="page" id="page-budget">
       <div class="kpi-row" id="budget-kpis"></div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-arrows-exchange" aria-hidden="true"></i>Income vs expenses</span><span class="card-hint">6 months</span></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>Income vs expenses</span><span class="card-hint">Monthly</span></div>
         <div class="cw" style="height:160px"><canvas id="budgetFlowChart"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>Spending by category</span><span class="card-hint">This month</span></div>
-        <div class="cw" style="height:220px"><canvas id="budgetCatChart"></canvas></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-trending-up" aria-hidden="true"></i>Balance trend</span></div>
+        <div class="cw" style="height:140px"><canvas id="budgetBalChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>Spending by category</span></div>
+        <div class="cw"><canvas id="budgetCatChart"></canvas></div>
       </div>
       <div class="card">
         <div class="card-head"><span class="card-title"><i class="ti ti-repeat" aria-hidden="true"></i>Recurring payments</span></div>
         <div id="recurringList"></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-list" aria-hidden="true"></i>Recent transactions</span></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-list" aria-hidden="true"></i>Transactions</span></div>
         <div class="tx-list" id="budgetTxList"></div>
       </div>
     </div>
 
-    <!-- ── SAVINGS & GOALS ── -->
+    <!-- ── SAVINGS ── -->
     <div class="page" id="page-savings">
       <div class="kpi-row" id="savings-kpis"></div>
       <div class="card">
-        <div class="card-head"><span class="card-title"><i class="ti ti-trending-up" aria-hidden="true"></i>Savings trend</span><span class="card-hint">6 months</span></div>
-        <div class="cw" style="height:180px"><canvas id="savingsAreaChart"></canvas></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-trending-up" aria-hidden="true"></i>Balance trend</span></div>
+        <div class="cw" style="height:140px"><canvas id="savingsAreaChart"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-head">
-          <span class="card-title"><i class="ti ti-target" aria-hidden="true"></i>Goals</span>
-          <button class="card-btn" id="addGoalBtn">+ Add</button>
-        </div>
-        <div id="goalsList"><p class="empty-msg">No goals yet — tap + Add to create one</p></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>Monthly contributions</span></div>
+        <div class="cw" style="height:130px"><canvas id="savingsContribChart"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-head">
-          <span class="card-title"><i class="ti ti-plane" aria-hidden="true"></i>Holidays</span>
-          <button class="card-btn" id="addHolidayBtn">+ Add</button>
-        </div>
-        <div id="holidayList"><p class="empty-msg">No trips yet — tap + Add to create one</p></div>
+        <div class="card-head"><span class="card-title"><i class="ti ti-target" aria-hidden="true"></i>Goals</span><button class="card-btn" id="addGoalBtn">+ Add</button></div>
+        <div id="goalsList"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title"><i class="ti ti-plane" aria-hidden="true"></i>Holidays</span><button class="card-btn" id="addHolidayBtn">+ Add</button></div>
+        <div id="holidayList"></div>
       </div>
     </div>
 
     <!-- ── INVESTMENTS ── -->
     <div class="page" id="page-investments">
       <div class="kpi-row" id="invest-kpis"></div>
+      <div id="investFlags"></div>
       <div class="card">
         <div class="card-head"><span class="card-title"><i class="ti ti-chart-donut" aria-hidden="true"></i>Allocation</span></div>
         <div style="display:flex;gap:16px;align-items:center">
-          <div class="cw" style="height:160px;flex:1"><canvas id="allocChart"></canvas></div>
+          <div class="cw" style="height:140px;flex:1"><canvas id="allocChart"></canvas></div>
           <div id="allocLegend" style="flex:1"></div>
         </div>
       </div>
@@ -150,50 +176,37 @@
     <button class="nav-item active" data-page="flii"><i class="ti ti-building" aria-hidden="true"></i><span>Flii Media</span></button>
     <button class="nav-item" data-page="holding"><i class="ti ti-briefcase" aria-hidden="true"></i><span>SB Holding</span></button>
     <button class="nav-item" data-page="budget"><i class="ti ti-wallet" aria-hidden="true"></i><span>Budget</span></button>
-    <button class="nav-item" data-page="savings"><i class="ti ti-target" aria-hidden="true"></i><span>Savings</span></button>
+    <button class="nav-item" data-page="savings"><i class="ti ti-pig-money" aria-hidden="true"></i><span>Savings</span></button>
     <button class="nav-item" data-page="investments"><i class="ti ti-chart-line" aria-hidden="true"></i><span>Investments</span></button>
   </nav>
 
-  <!-- Date picker sheet -->
+  <!-- Date picker -->
   <div class="settings-overlay" id="dateOverlay">
     <div class="settings-sheet">
       <div class="sheet-handle"></div>
-      <div class="sheet-title"><i class="ti ti-calendar-event" aria-hidden="true"></i>Custom date range</div>
-      <div class="field">
-        <label><i class="ti ti-calendar" aria-hidden="true"></i>From</label>
-        <input type="date" id="drFrom">
-      </div>
-      <div class="field">
-        <label><i class="ti ti-calendar" aria-hidden="true"></i>To</label>
-        <input type="date" id="drTo">
-      </div>
-      <button class="save-btn" id="drApplyBtn"><i class="ti ti-check" aria-hidden="true"></i>Apply range</button>
+      <div class="sheet-title"><i class="ti ti-calendar-event" aria-hidden="true"></i>Date range</div>
+      <div class="field"><label><i class="ti ti-calendar" aria-hidden="true"></i>From</label><input type="date" id="drFrom"></div>
+      <div class="field"><label><i class="ti ti-calendar" aria-hidden="true"></i>To</label><input type="date" id="drTo"></div>
+      <button class="save-btn" id="drApplyBtn"><i class="ti ti-check" aria-hidden="true"></i>Apply</button>
     </div>
   </div>
 
-  <!-- Settings sheet -->
+  <!-- Settings -->
   <div class="settings-overlay" id="settingsOverlay">
     <div class="settings-sheet">
       <div class="sheet-handle"></div>
-      <div class="sheet-title"><i class="ti ti-adjustments" aria-hidden="true"></i>About this cockpit</div>
-
-      <div class="section-sep">Data sources</div>
+      <div class="sheet-title"><i class="ti ti-settings" aria-hidden="true"></i>Settings</div>
+      <div class="section-sep">Account routing</div>
       <div class="account-list">
-        <div class="account-row"><span class="account-name"><i class="ti ti-building" aria-hidden="true"></i>Flii Media BV</span><span class="account-tab">Flii Media tab</span></div>
-        <div class="account-row"><span class="account-name"><i class="ti ti-briefcase" aria-hidden="true"></i>SB Holding BV</span><span class="account-tab">SB Holding tab</span></div>
-        <div class="account-row"><span class="account-name"><i class="ti ti-wallet" aria-hidden="true"></i>Rekeningen + Vast Samen</span><span class="account-tab">Budget tab</span></div>
-        <div class="account-row"><span class="account-name"><i class="ti ti-pig-money" aria-hidden="true"></i>Bruiloft</span><span class="account-tab">Savings tab</span></div>
-        <div class="account-row"><span class="account-name"><i class="ti ti-chart-line" aria-hidden="true"></i>Alpaca (paper)</span><span class="account-tab">Investments tab</span></div>
+        <div class="account-row"><span class="account-name"><i class="ti ti-building" aria-hidden="true"></i>Flii Media</span><span class="account-tab">Flii Media</span></div>
+        <div class="account-row"><span class="account-name"><i class="ti ti-briefcase" aria-hidden="true"></i>SB Holding</span><span class="account-tab">SB Holding</span></div>
+        <div class="account-row"><span class="account-name"><i class="ti ti-wallet" aria-hidden="true"></i>Rekeningen</span><span class="account-tab">Budget</span></div>
+        <div class="account-row"><span class="account-name"><i class="ti ti-users" aria-hidden="true"></i>Vast Samen</span><span class="account-tab">Budget</span></div>
+        <div class="account-row"><span class="account-name"><i class="ti ti-pig-money" aria-hidden="true"></i>Bruiloft</span><span class="account-tab">Savings</span></div>
       </div>
-
       <div class="section-sep">Last sync</div>
-      <p class="hint-text">Data last loaded at <strong id="lastSyncTime">—</strong>. Use the refresh button to reload.</p>
-
-      <div class="section-sep">Tax assumptions</div>
-      <p class="hint-text">BTW: 21% standard, 9% food/dining, 0% transport. Assumes gross amounts received are BTW-inclusive. VPB: 19% up to €200k profit, 25.8% above. Projections are estimates — always verify with your accountant.</p>
-
+      <p class="hint-text">Last updated: <strong id="lastSyncTime">—</strong></p>
       <button class="save-btn" id="closeSettingsBtn"><i class="ti ti-x" aria-hidden="true"></i>Close</button>
-      <div class="hint"><i class="ti ti-lock" style="font-size:12px" aria-hidden="true"></i>All API keys stored securely server-side</div>
     </div>
   </div>
 

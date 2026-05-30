@@ -16,9 +16,13 @@ async function kvGet(key) {
   return JSON.parse(json.result);
 }
 
-async function kvSet(key, value, ttl) {
-  await fetch(`${KV_URL}/set/${key}/${encodeURIComponent(JSON.stringify(value))}${ttl ? `/ex/${ttl}` : ''}`, {
-    headers: { Authorization: `Bearer ${KV_TOKEN}` }
+async function kvSet(key, value, ttl = null) {
+  // Use POST with JSON body to avoid URL length limits on large payloads
+  const url = ttl ? `${KV_URL}/set/${key}?ex=${ttl}` : `${KV_URL}/set/${key}`;
+  await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(JSON.stringify(value)),
   });
 }
 
@@ -196,14 +200,23 @@ export default async function handler(req, res) {
     if (action === 'payments') {
       if (!accountId) return res.status(400).json({ error: 'Missing accountId' });
       const paymentUserId = req.query.userId || userId;
+      const cacheKey = `payments_${accountId}`;
 
-      // Paginate through up to 12 months of history (max 200 per page)
-      const cutoff   = new Date();
+      // ── Step 1: Load existing cache from Redis ──
+      let cached = [];
+      try {
+        const hit = await kvGet(cacheKey);
+        if (hit) cached = hit;
+      } catch {}
+      const cachedIds = new Set(cached.map(p => p.id));
+
+      // ── Step 2: Fetch fresh payments from Bunq (up to 12 months) ──
+      const cutoff = new Date();
       cutoff.setMonth(cutoff.getMonth() - 12);
-      const allPayments = [];
+      const fresh = [];
       let endpoint = `/v1/user/${paymentUserId}/monetary-account/${accountId}/payment?count=200`;
       let pages = 0;
-      const MAX_PAGES = 10; // safety cap: 10 × 200 = 2000 payments max
+      const MAX_PAGES = 10;
 
       while (endpoint && pages < MAX_PAGES) {
         const { ok, json, status } = await bunqFetch(endpoint, 'GET', null, sessionToken, privateKey);
@@ -211,29 +224,36 @@ export default async function handler(req, res) {
           if (status === 401) await kvDel(CTX_KEY);
           return res.status(status).json({ error: json?.Error?.[0]?.error_description || 'Failed', expired: status === 401 });
         }
-
         const page = (json.Response || []).map(r => r.Payment).filter(Boolean);
         if (!page.length) break;
-
-        // Map to our slim payment shape
         for (const p of page) {
-          allPayments.push({
-            id: p.id, created: p.created, amount: p.amount,
-            description: p.description, type: p.type, counterparty: p.counterparty_alias,
-          });
+          fresh.push({ id: p.id, created: p.created, amount: p.amount, description: p.description, type: p.type, counterparty: p.counterparty_alias });
         }
-
-        // Stop if the oldest payment on this page is older than our cutoff
         const oldest = new Date(page[page.length - 1].created);
         if (oldest < cutoff) break;
-
-        // Follow older_url for next page
         const pagination = json.Pagination;
         endpoint = pagination?.older_url ? pagination.older_url.replace('https://api.bunq.com', '') : null;
         pages++;
       }
 
-      return res.status(200).json({ payments: allPayments });
+      // ── Step 3: Merge — add any fresh payments not already in cache ──
+      const newPayments = fresh.filter(p => !cachedIds.has(p.id));
+      const merged = [...newPayments, ...cached]
+        .sort((a, b) => new Date(b.created) - new Date(a.created));
+
+      // ── Step 4: Persist merged result to Redis (no expiry — keep forever) ──
+      if (newPayments.length > 0) {
+        try {
+          // Store in chunks of 500 if large, Upstash has 5MB per key limit
+          const MAX_PER_KEY = 2000;
+          await kvSet(cacheKey, merged.slice(0, MAX_PER_KEY));
+          console.log(`Stored ${merged.length} payments for account ${accountId} (${newPayments.length} new)`);
+        } catch (e) {
+          console.warn('Failed to cache payments:', e.message);
+        }
+      }
+
+      return res.status(200).json({ payments: merged, cached: cached.length, fresh: fresh.length, new: newPayments.length });
     }
 
     return res.status(400).json({ error: `Unknown action: ${action}` });

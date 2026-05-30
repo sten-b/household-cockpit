@@ -180,3 +180,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 .dr-preset:hover:not(.active) { background: var(--m5); color: var(--md); }
 .dr-preset i { font-size: 14px; }
 .dr-label { font-size: 10px; color: var(--t3); text-align: center; padding: 2px 6px; white-space: nowrap; }
+
+/* ── Flags / alerts ── */
+.flag { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; }
+.flag-warn { background: #fff8e6; border: 0.5px solid #f5d98b; color: #7a4f00; }
+.flag-warn i { color: #a06800; font-size: 14px; }
+
+/* ── Fixed vs variable split ── */
+.fixed-var-row { display: flex; align-items: stretch; gap: 0; background: var(--bg); border: 0.5px solid var(--bd); border-radius: 8px; overflow: hidden; }
+.fv-item { flex: 1; padding: 12px 14px; }
+.fv-lbl { font-size: 10px; font-weight: 600; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+.fv-val { font-size: 15px; font-weight: 500; }
+.fv-div { width: 0.5px; background: var(--bd); }
