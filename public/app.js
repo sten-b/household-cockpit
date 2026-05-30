@@ -68,16 +68,31 @@ const recentMonths = (ps,n=6) => [...new Set(ps.map(p=>p.created.slice(0,7)))].s
 
 // ── Categorise ────────────────────────────────────────────────────────────────
 // Business labels (used for Flii Media + SB Holding accounts)
+// Known payees matched on counterparty name (higher priority than regex)
+const isKnownEmployee  = p => /nada[\.\s]?zaid|mayte[\.\s]?almanza/i.test(cpName(p));
+const isKnownDirector  = p => /sten[\.\s]?bossong/i.test(cpName(p)) && !/holding/i.test(cpName(p));
+const isKnownHolding   = p => /sb[\.\s]?holding|sten[\.\s]?bossong[\.\s]?holding/i.test(cpName(p));
+
 const BIZ_RULES = [
+  // Tax — use payment description to detect type
   [/belastingdienst/i, p => {
-    const s=(p.description||'').toLowerCase();
-    if(/btw|omzetbelasting/i.test(s))   return 'Tax — BTW';
-    if(/vpb|vennootschap/i.test(s))     return 'Tax — VPB';
-    if(/loonheffing|loonbelasting/i.test(s)) return 'Tax — Loonheffing';
-    if(/inkomstenbelasting|ib/i.test(s)) return 'Tax — IB';
+    const s = (p.description || '').toLowerCase();
+    if (/btw|omzetbelasting/i.test(s))       return 'Tax — BTW';
+    if (/vpb|vennootschap/i.test(s))         return 'Tax — VPB';
+    if (/loonheffing|loonbelasting/i.test(s)) return 'Tax — Loonheffing';
+    if (/inkomstenbelasting/i.test(s))       return 'Tax — IB';
     return 'Tax';
   }],
-  [/salary|salaris|loon|management fee|dga|directeur|bezoldiging/i, () => 'Wage'],
+  // Management fee — Flii → SB Holding
+  [p => isKnownHolding(p) && amt(p) < 0, () => 'Management fee'],
+  // Management fee received — Holding perspective
+  [p => isKnownHolding(p) && amt(p) > 0, () => 'Management fee'],
+  // Employee wages
+  [p => isKnownEmployee(p), () => 'Wage — employee'],
+  // Director wage (Sten personally, not the holding BV)
+  [p => isKnownDirector(p), () => 'Wage — director'],
+  // Generic wage fallback
+  [/salary|salaris|loon|loonstrook|dga|bezoldiging/i, () => 'Wage'],
   [/dividend/i, () => 'Dividend'],
   [/accountant|boekhouder|administratie|notaris|juridisch|legal|audit/i, () => 'Professional services'],
   [/verzekering|insurance/i, () => 'Insurance'],
@@ -85,8 +100,7 @@ const BIZ_RULES = [
   [/software|saas|hosting|domain|cloudflare|aws|azure|vercel|github/i, () => 'Software & hosting'],
   [/telefoon|mobiel|internet|kpn|vodafone|t-mobile|tele2/i, () => 'Telecom'],
   [/lease|huur|rent|kantoor|office/i, () => 'Rent & facilities'],
-  [/reizen|travel|hotel|vlieg|flight|trein|ns |booking|airbnb/i, () => 'Travel'],
-  [/zakelijk|business|inkoop|material|supplies/i, () => 'Business expense'],
+  [/reizen|travel|hotel|vlieg|flight|trein|\bns\b|booking|airbnb/i, () => 'Travel'],
 ];
 
 // Personal labels (used for Budget + Savings accounts)
@@ -133,7 +147,10 @@ const BIZ_IDS = new Set([...ACCT.flii, ...ACCT.holding]);
 function categorise(p, accountId) {
   const s = (p.description || '') + ' ' + cpName(p);
   const rules = (accountId && BIZ_IDS.has(accountId)) ? BIZ_RULES : PERSONAL_RULES;
-  for (const [re, fn] of rules) if (re.test(s)) return fn(p);
+  for (const [matcher, fn] of rules) {
+    const matched = typeof matcher === 'function' ? matcher(p) : matcher.test(s);
+    if (matched) return fn(p);
+  }
   return 'Other';
 }
 
@@ -348,8 +365,8 @@ function renderFlii() {
 
   const thisM=totals[totals.length-1]||{income:0,expenses:0,net:0};
   const lastM=totals[totals.length-2]||{income:0,expenses:0,net:0};
-  const incoming=payments.filter(p=>amt(p)>0&&!isBelastingdienst(p));
-  const outgoing=payments.filter(p=>amt(p)<0&&!isBelastingdienst(p));
+  const incoming=payments.filter(p=>amt(p)>0);
+  const outgoing=payments.filter(p=>amt(p)<0);  // includes tax — shown as 'Tax — BTW' etc.
   const totalRev=incoming.reduce((s,p)=>s+amt(p),0);
   const totalExp=outgoing.reduce((s,p)=>s+Math.abs(amt(p)),0);
   const grossMargin=totalRev>0?((totalRev-totalExp)/totalRev*100):0;
@@ -406,7 +423,12 @@ function renderHolding() {
 
   // Management fees in, wages/salary out
   const mgmtFees=payments.filter(p=>amt(p)>0&&!isBelastingdienst(p));
-  const wages=payments.filter(p=>amt(p)<0&&!isBelastingdienst(p)&&/salary|salaris|loon|management|dga|directeur/i.test((p.description||'')+cpName(p)));
+  // Wages: payments to known employees or DGA (Sten Bossong personally, not the holding)
+  const wages=payments.filter(p=>amt(p)<0&&!isBelastingdienst(p)&&(
+    /nada.?zaid|mayte.?almanza/i.test(cpName(p)) ||
+    (/sten.?bossong/i.test(cpName(p))&&!/holding/i.test(cpName(p))) ||
+    /salary|salaris|loon|loonstrook|dga|bezoldiging/i.test((p.description||'')+cpName(p))
+  ));
   const intercompany=payments.filter(p=>isIntercompany(p));
   const totalFees=mgmtFees.reduce((s,p)=>s+amt(p),0);
   const totalWages=wages.reduce((s,p)=>s+Math.abs(amt(p)),0);
