@@ -217,8 +217,9 @@ export default async function handler(req, res) {
       const paymentUserId = req.query.userId || userId;
       const cacheKey      = `payments_${accountId}`;
 
-      // Load cache
-      const cached    = (await kvGet(cacheKey)) || [];
+      // Load cache — guard against corrupted/non-array data
+      const raw       = await kvGet(cacheKey);
+      const cached    = Array.isArray(raw) ? raw : [];
       const cachedIds = new Set(cached.map(p => p.id));
 
       // Fetch fresh from Bunq (up to 12 months, 10 pages of 200)
