@@ -94,13 +94,22 @@ const BIZ_RULES = [
   // Generic wage fallback
   [/salary|salaris|loon|loonstrook|dga|bezoldiging/i, () => 'Wage'],
   [/dividend/i, () => 'Dividend'],
-  [/accountant|boekhouder|administratie|notaris|juridisch|legal|audit/i, () => 'Professional services'],
+  // Advertising / media spend — matched on counterparty name
+  [/facebk|metapay|facebook ads|instagram|google.*ads|google.*adwords|linkedin.*ads/i, () => 'Advertising'],
+  [/backlink/i, () => 'Advertising'],
+  // Software & tooling — specific vendors from transactions
+  [/anthropic|claude\.ai|openai|chatgpt|taskade|webflow|hostinger|google.*(workspace|gsuite)|typeform|capcut|canva|moneybird/i, () => 'Software & tooling'],
+  [/software|saas|hosting|domain|cloudflare|aws|azure|vercel|github/i, () => 'Software & tooling'],
+  // Subcontractors
+  [/digital movements/i, () => 'Subcontractor'],
+  // Professional services
+  [/accountant|boekhouder|administratie|notaris|juridisch|legal|audit|belastingadv/i, () => 'Professional services'],
   [/verzekering|insurance/i, () => 'Insurance'],
-  [/reclame|marketing|advertentie|google ads|meta ads|linkedin/i, () => 'Marketing'],
-  [/software|saas|hosting|domain|cloudflare|aws|azure|vercel|github/i, () => 'Software & hosting'],
   [/telefoon|mobiel|internet|kpn|vodafone|t-mobile|tele2/i, () => 'Telecom'],
   [/lease|huur|rent|kantoor|office/i, () => 'Rent & facilities'],
   [/reizen|travel|hotel|vlieg|flight|trein|\bns\b|booking|airbnb/i, () => 'Travel'],
+  // Catch management fee by description as final fallback
+  [/management.*fee|beheervergoeding/i, () => 'Management fee'],
 ];
 
 // Personal labels (used for Budget + Savings accounts)
@@ -154,10 +163,14 @@ function categorise(p, accountId) {
   return 'Other';
 }
 
-// Detect intercompany flows
+// Detect intercompany flows — match by IBAN or name
+const FLII_IBAN    = 'NL23BUNQ2060789095';
+const HOLDING_IBAN_ALT = 'NL95BUNQ2060792940'; // same as HOLDING_IBAN
 const isIntercompany = p => {
-  const s = cpName(p).toLowerCase();
-  return s.includes('flii') || s.includes('holding') || s.includes('sb ');
+  const iban = p.counterparty?.iban || '';
+  const name = cpName(p).toLowerCase();
+  return iban === FLII_IBAN || iban === HOLDING_IBAN_ALT ||
+         name.includes('flii') || name.includes('holding') || name.includes('sb ');
 };
 
 // ── Tax helpers ───────────────────────────────────────────────────────────────
@@ -691,9 +704,24 @@ async function loadBunq(){
   try{
     const{accounts}=await bunqProxy('accounts');state.accounts=accounts;
     const results=await Promise.allSettled(accounts.map(a=>bunqProxy('payments',{accountId:a.id,userId:a.userId}).then(r=>({id:a.id,payments:r.payments}))));
-    for(const r of results)if(r.status==='fulfilled')state.payments[r.value.id]=r.value.payments;
+    let totalPayments=0;
+    for(const r of results){
+      if(r.status==='fulfilled'){
+        state.payments[r.value.id]=r.value.payments;
+        totalPayments+=r.value.payments.length;
+      } else {
+        console.error('Payment fetch failed:',r.reason?.message);
+      }
+    }
+    console.log('Total payments loaded:',totalPayments,'across',accounts.length,'accounts');
     setConn('bunq','ok');renderActive();
-  }catch(err){console.error('Bunq:',err.message);setConn('bunq','error');}
+  }catch(err){
+    console.error('Bunq:',err.message);
+    setConn('bunq','error');
+    // Show error in UI so it's visible without dev tools
+    const el=document.getElementById('flii-kpis');
+    if(el)el.innerHTML=`<div class="error-card" style="grid-column:span 2"><i class="ti ti-alert-circle"></i>${err.message}</div>`;
+  }
 }
 
 async function loadAlpaca(){

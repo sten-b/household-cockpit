@@ -17,32 +17,156 @@
   --r:   10px;
   --safe-top:    env(safe-area-inset-top,    0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Nav height constants — keeps scroll-area padding in sync */
+  --nav-h:      56px;
+  --nav-pb:     max(var(--safe-bottom), 8px);
 }
 
 html { -webkit-text-size-adjust: 100%; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif; background: var(--bg); color: var(--t1); min-height: 100dvh; overscroll-behavior: none; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--t1);
+  min-height: 100dvh;
+  overscroll-behavior: none;
+}
 #app { display: flex; flex-direction: column; min-height: 100dvh; }
 
 /* ── Topbar ── */
-.topbar { position: sticky; top: 0; z-index: 100; background: var(--bg); padding: calc(var(--safe-top) + 12px) 16px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 0.5px solid var(--bd); }
-.topbar h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
-.meta { font-size: 11px; color: var(--t3); margin-top: 3px; display: flex; align-items: center; gap: 10px; }
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg);
+  padding: calc(var(--safe-top) + 10px) 14px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 0.5px solid var(--bd);
+  min-height: 0;
+}
+.topbar-left { flex-shrink: 1; min-width: 0; overflow: hidden; }
+.topbar h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+.meta {
+  font-size: 11px;
+  color: var(--t3);
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+}
 .conn { display: inline-flex; align-items: center; gap: 4px; }
 .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--pos); flex-shrink: 0; transition: background .3s; }
 .dot.amber { background: #c97d00; }
 .dot.red   { background: var(--neg); }
-.icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 0.5px solid var(--bd2); background: var(--sur); display: flex; align-items: center; justify-content: center; color: var(--t2); cursor: pointer; font-size: 17px; transition: background .15s, color .15s; }
+
+/* Right side of topbar — flex with wrap-prevention */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-radius: 8px;
+  border: 0.5px solid var(--bd2);
+  background: var(--sur);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--t2);
+  cursor: pointer;
+  font-size: 17px;
+  transition: background .15s, color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
 .icon-btn:active { background: var(--m5); color: var(--m1); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Date range selector ── */
+.date-range-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--sur);
+  border: 0.5px solid var(--bd2);
+  border-radius: 8px;
+  padding: 3px;
+}
+.dr-preset {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--t3);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.dr-preset.active { background: var(--m1); color: #fff; }
+.dr-preset:hover:not(.active) { background: var(--m5); color: var(--md); }
+.dr-preset i { font-size: 15px; }
+
 /* ── Layout ── */
-.scroll-area { flex: 1; overflow-y: auto; padding: 14px 14px calc(var(--safe-bottom) + 76px); }
+.scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  /* Bottom padding = nav height + safe area + extra buffer for Android gesture bar */
+  padding: 14px 14px calc(var(--nav-h) + var(--nav-pb) + 16px);
+  -webkit-overflow-scrolling: touch;
+}
 .page { display: none; }
 .page.active { display: block; }
 
 /* ── Bottom nav ── */
-.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--sur); border-top: 0.5px solid var(--bd); padding: 6px 0 calc(var(--safe-bottom) + 6px); display: flex; z-index: 100; }
-.nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; background: none; border: none; cursor: pointer; color: var(--t3); font-size: 10px; font-family: inherit; transition: color .15s; white-space: nowrap; }
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--sur);
+  border-top: 0.5px solid var(--bd);
+  /* Inner padding: above content + below = safe area aware */
+  padding: 0 0 var(--nav-pb);
+  display: flex;
+  z-index: 100;
+  /* Prevent content from being hidden by Android gesture nav bar */
+  /* The nav itself sits above the gesture bar because of the padding */
+}
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  /* Fixed height ensures consistent scroll-area padding */
+  height: var(--nav-h);
+  padding: 0 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--t3);
+  font-size: 10px;
+  font-family: inherit;
+  transition: color .15s;
+  white-space: nowrap;
+  /* Ensure 44px minimum tap target */
+  min-height: 44px;
+  -webkit-tap-highlight-color: transparent;
+}
 .nav-item i { font-size: 20px; }
 .nav-item.active { color: var(--m1); }
 
@@ -64,7 +188,18 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 .card-title { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; color: var(--t1); }
 .card-title i { font-size: 15px; color: var(--t3); }
 .card-hint { font-size: 11px; color: var(--t3); }
-.card-btn { font-size: 11px; color: var(--t3); background: none; border: 0.5px solid var(--bd2); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-family: inherit; transition: background .15s, color .15s; }
+.card-btn {
+  font-size: 11px;
+  color: var(--t3);
+  background: none;
+  border: 0.5px solid var(--bd2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s, color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
 .card-btn:active { background: var(--m5); color: var(--m1); }
 .cw { position: relative; width: 100%; }
 .error-card { background: var(--m5); border: 0.5px solid var(--m4); border-radius: 8px; padding: 12px; font-size: 12px; color: var(--md); display: flex; gap: 8px; align-items: center; }
@@ -117,15 +252,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 .pos-val { font-size: 11px; font-weight: 500; text-align: right; flex-shrink: 0; width: 64px; color: var(--t1); }
 .pos-pl { font-size: 11px; text-align: right; flex-shrink: 0; width: 46px; }
 
-
-
 /* ── Data tables ── */
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.data-table th { font-size: 10px; font-weight: 600; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; text-align: left; padding: 0 10px 8px 0; border-bottom: 0.5px solid var(--bd2); white-space: nowrap; }
+.data-table th {
+  font-size: 10px; font-weight: 600; color: var(--t3); text-transform: uppercase;
+  letter-spacing: .06em; text-align: left; padding: 0 10px 8px 0;
+  border-bottom: 0.5px solid var(--bd2); white-space: nowrap;
+}
 .data-table th.num { text-align: right; }
 .data-table th:last-child, .data-table td:last-child { padding-right: 0; }
-.data-table td { padding: 9px 10px 9px 0; border-bottom: 0.5px solid var(--bd); color: var(--t2); vertical-align: middle; }
+.data-table td {
+  padding: 9px 10px 9px 0; border-bottom: 0.5px solid var(--bd); color: var(--t2); vertical-align: middle;
+}
 .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .data-table td.bold { font-weight: 500; color: var(--t1); }
 .data-table td.neg-val { color: var(--neg); font-weight: 500; }
@@ -142,7 +281,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 /* ── Settings sheet ── */
 .settings-overlay { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.35); align-items: flex-end; }
 .settings-overlay.open { display: flex; }
-.settings-sheet { width: 100%; background: var(--sur); border-radius: 18px 18px 0 0; padding: 20px 20px calc(var(--safe-bottom) + 20px); max-height: 90dvh; overflow-y: auto; }
+.settings-sheet {
+  width: 100%;
+  background: var(--sur);
+  border-radius: 18px 18px 0 0;
+  padding: 20px 20px calc(var(--safe-bottom) + 20px);
+  max-height: 90dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .sheet-handle { width: 36px; height: 4px; background: var(--bd2); border-radius: 2px; margin: 0 auto 20px; }
 .sheet-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
 .sheet-title i { color: var(--m1); }
@@ -155,7 +302,20 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 .account-name { font-size: 12px; color: var(--t1); display: flex; align-items: center; gap: 6px; }
 .account-name i { font-size: 14px; color: var(--t3); }
 .account-tab { font-size: 11px; color: var(--m1); font-weight: 500; }
-.save-btn { width: 100%; padding: 13px; border-radius: 10px; border: none; background: var(--m1); color: #fff; font-size: 15px; font-weight: 500; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer; margin-top: 16px; transition: background .15s; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.field label { font-size: 12px; color: var(--t3); display: flex; align-items: center; gap: 5px; }
+.field input[type="date"] {
+  width: 100%; padding: 10px 12px; border: 0.5px solid var(--bd2); border-radius: 8px;
+  background: var(--bg); font-family: inherit; font-size: 14px; color: var(--t1);
+  appearance: none; -webkit-appearance: none;
+}
+.save-btn {
+  width: 100%; padding: 13px; border-radius: 10px; border: none; background: var(--m1);
+  color: #fff; font-size: 15px; font-weight: 500; font-family: inherit;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  cursor: pointer; margin-top: 16px; transition: background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
 .save-btn:active { background: var(--md); }
 .save-btn i { font-size: 17px; }
 .hint { font-size: 11px; color: var(--t3); text-align: center; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 4px; }
@@ -170,14 +330,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 .freq-tag { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #f0ede6; color: var(--t2); white-space: nowrap; }
 .tax-basis { font-size: 11px; color: var(--t3); line-height: 1.4; }
 
-/* ── Date range selector ── */
-.topbar-right { display: flex; align-items: center; gap: 8px; }
-.date-range-wrap { display: flex; align-items: center; gap: 2px; background: var(--sur); border: 0.5px solid var(--bd2); border-radius: 8px; padding: 3px; }
-.dr-preset { font-size: 11px; font-weight: 500; padding: 5px 9px; border-radius: 6px; border: none; background: transparent; color: var(--t3); cursor: pointer; font-family: inherit; transition: all .15s; white-space: nowrap; display: flex; align-items: center; }
-.dr-preset.active { background: var(--m1); color: #fff; }
-.dr-preset:hover:not(.active) { background: var(--m5); color: var(--md); }
-.dr-preset i { font-size: 15px; }
-
 /* ── Flags / alerts ── */
 .flag { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; }
 .flag-warn { background: #fff8e6; border: 0.5px solid #f5d98b; color: #7a4f00; }
@@ -190,22 +342,43 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 .fv-val { font-size: 15px; font-weight: 500; }
 .fv-div { width: 0.5px; background: var(--bd); }
 
-/* ── Responsive ── */
+/* ── Donut layout ── */
+.donut-row { display: flex; gap: 16px; align-items: center; }
+.donut-chart { flex: 0 0 150px; }
+.donut-legend { flex: 1; min-width: 0; }
 
-/* Narrow phones (< 380px): simplify topbar */
+/* ══════════════════════════════════════════════════════
+   RESPONSIVE
+   ══════════════════════════════════════════════════════ */
+
+/* ── Very narrow phones (< 380px) ── */
 @media (max-width: 379px) {
+  /* Date range: only show active preset + calendar icon */
   .dr-preset:not(.active):not([data-preset="custom"]) { display: none; }
-  .dr-preset.active { min-width: 40px; justify-content: center; }
+  .dr-preset.active { min-width: 44px; justify-content: center; padding: 5px 6px; }
+  /* Topbar */
+  .topbar { padding-left: 12px; padding-right: 12px; gap: 6px; }
   .topbar h1 { font-size: 15px; }
   .meta { display: none; }
+  /* KPIs */
   .kpi-val { font-size: 19px; }
+  /* Tax row collapses to 2-col + 1 spanning */
   .tax-kpi-row { grid-template-columns: 1fr 1fr; }
   .tax-kpi-row .tax-kpi:last-child { grid-column: span 2; }
+  /* Donut stacks */
+  .donut-row { flex-direction: column; align-items: stretch; }
+  .donut-chart { flex: none; }
+  .donut-legend { display: grid; grid-template-columns: 1fr 1fr; }
+  /* Nav labels shorter */
+  .nav-item { font-size: 9px; }
 }
 
-/* Tablet (>= 640px): wider layouts */
+/* ── Standard phones (380–639px) — default mobile styles above apply ── */
+
+/* ── Tablet (>= 640px) ── */
 @media (min-width: 640px) {
-  .scroll-area { padding: 20px 20px calc(var(--safe-bottom) + 76px); }
+  :root { --nav-h: 60px; }
+  .scroll-area { padding: 20px 20px calc(var(--nav-h) + var(--nav-pb) + 20px); }
   .kpi-row { grid-template-columns: repeat(4, 1fr); }
   .kpi.full { grid-column: span 4; }
   .tax-kpi-row { grid-template-columns: repeat(3, 1fr); }
@@ -216,28 +389,35 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
   .tx-name { font-size: 13px; }
 }
 
-/* Desktop (>= 960px): constrain width, side padding */
+/* ── Desktop (>= 960px) — constrained max-width ── */
 @media (min-width: 960px) {
+  :root { --nav-h: 62px; }
   #app { max-width: 860px; margin: 0 auto; }
   .topbar { border-radius: 0; }
-  .bottom-nav { max-width: 860px; left: 50%; transform: translateX(-50%); border-radius: 0; }
-  .scroll-area { padding: 24px 24px calc(var(--safe-bottom) + 80px); }
+  /* On desktop, nav is anchored inside the #app column */
+  .bottom-nav {
+    max-width: 860px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 0.5px solid var(--bd);
+    border-right: 0.5px solid var(--bd);
+  }
+  .scroll-area { padding: 24px 24px calc(var(--nav-h) + var(--nav-pb) + 24px); }
   .kpi-val { font-size: 24px; }
 }
 
-/* Large desktop (>= 1200px) */
+/* ── Large desktop (>= 1200px) ── */
 @media (min-width: 1200px) {
   #app { max-width: 1000px; }
   .bottom-nav { max-width: 1000px; }
 }
 
-/* ── Donut layout ── */
-.donut-row { display: flex; gap: 16px; align-items: center; }
-.donut-chart { flex: 0 0 150px; }
-.donut-legend { flex: 1; min-width: 0; }
-
-@media (max-width: 379px) {
-  .donut-row { flex-direction: column; align-items: stretch; }
-  .donut-chart { flex: none; }
-  .donut-legend { display: grid; grid-template-columns: 1fr 1fr; }
+/* ── Landscape phones (short viewport, wide) ── */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root { --nav-h: 44px; }
+  .nav-item { font-size: 0; }   /* Hide text labels, icons only */
+  .nav-item i { font-size: 18px; }
+  .topbar { padding-top: calc(var(--safe-top) + 6px); padding-bottom: 6px; }
+  .meta { display: none; }
+  .scroll-area { padding-top: 10px; }
 }
